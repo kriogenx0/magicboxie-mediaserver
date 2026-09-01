@@ -36,4 +36,7 @@ body {
 }
 .scroll-row {
   scrollbar-width: none;
+  /* Without this, browsers pair overflow-x:auto with an implicit overflow-y:auto,
+     letting a hover-scaled poster that pokes past the row's height make it scroll vertically. */
+  overflow-y: hidden;
 }
