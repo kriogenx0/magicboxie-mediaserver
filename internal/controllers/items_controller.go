@@ -67,6 +67,8 @@ type jellyfinItem struct {
 	Id                string                `json:"Id"`
 	Name              string                `json:"Name"`
 	Type              string                `json:"Type"`
+	CollectionType    string                `json:"CollectionType,omitempty"`
+	IsFolder          bool                  `json:"IsFolder,omitempty"`
 	Overview          string                `json:"Overview,omitempty"`
 	ProductionYear    int                   `json:"ProductionYear,omitempty"`
 	RunTimeTicks      int64                 `json:"RunTimeTicks,omitempty"`
@@ -214,12 +216,18 @@ func trackToItem(t models.Track, albumTitle, artistName string) jellyfinItem {
 }
 
 // Views returns the fixed top-level libraries ("Movies", "Music") a
-// Jellyfin client browses into via ParentId.
+// Jellyfin client browses into via ParentId. CollectionType matters beyond
+// cosmetics: e.g. Swiftfin's home screen builds a "Latest in <library>" row
+// only for views whose CollectionType is one of a known set (movies,
+// tvshows, musicvideos, homevideos) -- unlike its generic library browser,
+// it does not fall back to treating a missing CollectionType as a plain
+// folder, so omitting it silently hides the library from that screen even
+// though login and manual browsing still work.
 func (ic *ItemsController) Views(c *gin.Context) {
 	c.JSON(http.StatusOK, itemsResponse{
 		Items: []jellyfinItem{
-			{Id: "movies", Name: "Movies", Type: "CollectionFolder"},
-			{Id: "music", Name: "Music", Type: "CollectionFolder"},
+			{Id: "movies", Name: "Movies", Type: "CollectionFolder", CollectionType: "movies", IsFolder: true},
+			{Id: "music", Name: "Music", Type: "CollectionFolder", CollectionType: "music", IsFolder: true},
 		},
 		TotalRecordCount: 2,
 	})
