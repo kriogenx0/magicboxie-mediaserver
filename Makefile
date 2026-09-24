@@ -22,7 +22,7 @@ PI_CONTENT_DIR ?= /content
 # magicboxie-device Pi find this server without a fixed/static IP.
 PI_HOSTNAME ?= magicboxie
 
-.PHONY: default build build-local build-web build-go run run-local dev restart deploy publish open test tidy setup pi-setup pi-install pi-run pi-logs
+.PHONY: default build build-local build-web build-go run run-local dev restart deploy publish open test test-docker tidy setup pi-setup pi-install pi-run pi-logs
 
 # Keep the no-argument workflow aligned with `make dev`.
 default: dev
@@ -195,6 +195,14 @@ open:
 
 test:
 	go test ./...
+
+# Same suite (including the Jellyfin API-conformance tests) in a throwaway Go
+# container, for machines without a local Go toolchain. Module and build
+# caches live in named volumes so repeat runs are fast.
+test-docker:
+	docker run --rm -v "$(CURDIR)":/src -w /src \
+		-v magicboxie-gomod:/go/pkg/mod -v magicboxie-gobuild:/root/.cache/go-build \
+		golang:1.26 go test ./...
 
 tidy:
 	go mod tidy
