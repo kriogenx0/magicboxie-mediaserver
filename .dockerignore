@@ -1,0 +1,15 @@
+# Keep the build context to source only. Without this every build uploads the
+# local media library (content/), the SQLite data dir, host-built node_modules
+# (macOS binaries that would clobber the container's), and configs holding the
+# password hash and TMDB token.
+.git
+.github
+bin
+content
+data
+configs/magicboxie.yaml
+configs/magicboxie.local.yaml
+frontend/node_modules
+frontend/dist
+# Rebuilt inside the image by the frontend stage.
+internal/web/dist

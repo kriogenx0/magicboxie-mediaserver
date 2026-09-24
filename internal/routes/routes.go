@@ -24,7 +24,10 @@ type Dependencies struct {
 //  1. A Jellyfin-compatible surface at bare paths (/System, /Users, /Items,
 //     /Videos, /Sessions) matching real Jellyfin's conventions exactly, so
 //     magicboxie-appletv (already a partial Jellyfin client) and any generic
-//     Jellyfin client work against this server unmodified.
+//     Jellyfin client work against this server unmodified. The conformance
+//     tests (jellyfin_*_test.go) check every route here against Jellyfin's
+//     published OpenAPI spec; a route that isn't in it must be classified there
+//     as a legacy or extension route on purpose.
 //  2. MagicBoxie-specific extensions with no Jellyfin equivalent (chunked
 //     upload, library scan trigger, SSE job-progress, manual TMDB
 //     re-match), namespaced under /api/* so they're clearly separate
@@ -37,6 +40,8 @@ func Register(router *gin.Engine, deps Dependencies) {
 	router.GET("/Branding/Splashscreen", func(c *gin.Context) { c.Status(404) })
 	router.POST("/Users/AuthenticateByName", deps.AuthController.AuthenticateByName)
 	router.GET("/socket", func(c *gin.Context) { c.Status(404) })
+	router.GET("/System/Ping", deps.AuthController.Ping)
+	router.POST("/System/Ping", deps.AuthController.Ping)
 
 	// Unauthenticated check-in for magicboxie-device Pis (see
 	// player_app/views/home_sync_service.py in that repo) -- a lower-friction
@@ -46,9 +51,10 @@ func Register(router *gin.Engine, deps Dependencies) {
 
 	// Images are unauthenticated, matching real Jellyfin's convention (so
 	// <img> tags never need a token).
-	router.GET("/Items/:itemId/Images/Primary", deps.ItemsController.PrimaryImage)
-	router.GET("/Items/:itemId/Images/Backdrop/:index", deps.ItemsController.BackdropImage)
-	router.GET("/Items/:itemId/Images/Thumbnail/:index", deps.ItemsController.ThumbnailCandidateImage)
+	router.GET("/Items/:itemId/Images/:imageType", deps.ItemsController.ItemImage)
+	router.HEAD("/Items/:itemId/Images/:imageType", deps.ItemsController.ItemImage)
+	router.GET("/Items/:itemId/Images/:imageType/:imageIndex", deps.ItemsController.ItemImage)
+	router.HEAD("/Items/:itemId/Images/:imageType/:imageIndex", deps.ItemsController.ItemImage)
 
 	router.GET("/api/health", controllers.Health)
 
@@ -56,15 +62,30 @@ func Register(router *gin.Engine, deps Dependencies) {
 	authorized.Use(middleware.RequireAuth(deps.AuthManager))
 	{
 		authorized.GET("/Users/Me", deps.AuthController.CurrentUser)
-		authorized.GET("/UserViews", deps.ItemsController.Views)
+		authorized.GET("/Users/:userId", deps.AuthController.UserByID)
+		authorized.GET("/System/Info", deps.AuthController.SystemInfo)
 		authorized.GET("/UserImage", func(c *gin.Context) { c.Status(404) })
 		authorized.POST("/Sessions/Capabilities", func(c *gin.Context) { c.Status(204) })
 		authorized.POST("/Sessions/Capabilities/Full", func(c *gin.Context) { c.Status(204) })
+
+		// Library browsing, as current Jellyfin clients (Swiftfin, Findroid,
+		// jellyfin-web...) call it. GET /Items is the one listing endpoint behind
+		// every library, tab and search; the user comes from the token, not the path.
+		authorized.GET("/UserViews", deps.ItemsController.Views)
+		authorized.GET("/Items", deps.ItemsController.ListItems)
+		authorized.GET("/Items/Latest", deps.ItemsController.Latest)
+		authorized.GET("/Items/:itemId", deps.ItemsController.Detail)
+		authorized.GET("/UserItems/Resume", deps.ItemsController.EmptyItems)
+		authorized.GET("/Shows/NextUp", deps.ItemsController.EmptyItems)
+
+		// Pre-10.9 per-user paths, gone from Jellyfin but still used by the web
+		// UI and magicboxie-appletv (see legacyRoutes in the conformance tests).
 		authorized.GET("/Users/:userId/Views", deps.ItemsController.Views)
 		authorized.GET("/Users/:userId/Items", deps.ItemsController.List)
 		authorized.GET("/Users/:userId/Items/Latest", deps.ItemsController.Latest)
 		authorized.GET("/Users/:userId/Items/:itemId", deps.ItemsController.Detail)
 
+		authorized.GET("/Items/:itemId/PlaybackInfo", deps.ItemsController.PlaybackInfo)
 		authorized.POST("/Items/:itemId/PlaybackInfo", deps.ItemsController.PlaybackInfo)
 
 		authorized.GET("/Videos/:itemId/stream", deps.VideosController.Stream)
@@ -74,6 +95,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 		authorized.GET("/Audio/:itemId/stream", deps.AudioController.Stream)
 		authorized.HEAD("/Audio/:itemId/stream", deps.AudioController.Stream)
 
+		authorized.POST("/Sessions/Playing", controllers.PlayingStart)
 		authorized.POST("/Sessions/Playing/Progress", controllers.PlayingProgress)
 		authorized.POST("/Sessions/Playing/Stopped", controllers.PlayingStopped)
 

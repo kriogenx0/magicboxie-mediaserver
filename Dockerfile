@@ -2,14 +2,14 @@
 
 # ---- Stage 1: frontend ----
 FROM node:20-slim AS frontend
-WORKDIR /src
-COPY frontend ./frontend
-COPY internal/web/dist ./internal/web/dist
-RUN if [ -f frontend/package.json ]; then \
-      cd frontend && npm ci && npm run build; \
-    else \
-      echo "frontend/package.json not present yet -- keeping placeholder internal/web/dist"; \
-    fi
+WORKDIR /src/frontend
+# Dependencies first, so the (slow) `npm ci` layer is reused until
+# package*.json actually changes rather than re-running on every source edit.
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend ./
+# vite.config.ts writes the bundle to ../internal/web/dist (= /src/internal/web/dist).
+RUN npm run build
 
 # ---- Stage 2: Go binary ----
 FROM golang:1.26 AS backend

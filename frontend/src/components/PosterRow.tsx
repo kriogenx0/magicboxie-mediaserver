@@ -26,7 +26,7 @@ export function PosterRow({ title, movies, onSelect }: { title: string; movies: 
         ‹
       </button>
 
-      <div ref={scrollerRef} className="scroll-row flex gap-2 overflow-x-auto px-4 pb-1 sm:gap-2.5 sm:px-10">
+      <div ref={scrollerRef} className="scroll-row flex gap-2 overflow-x-auto px-4 pb-24 pt-12 sm:gap-2.5 sm:px-10">
         {movies.map((movie) => (
           <div key={movie.id} className="w-28 shrink-0 sm:w-36 md:w-40 lg:w-44 xl:w-48">
             <PosterCard movie={movie} onSelect={onSelect} />

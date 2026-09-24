@@ -59,14 +59,21 @@ type jellyfinPerson struct {
 }
 
 type jellyfinMediaStream struct {
-	Type  string `json:"Type"`
-	Codec string `json:"Codec"`
+	Index     int    `json:"Index"`
+	Type      string `json:"Type"`
+	Codec     string `json:"Codec"`
+	IsDefault bool   `json:"IsDefault"`
 }
 
 type jellyfinItem struct {
 	Id                string                `json:"Id"`
+	ServerId          string                `json:"ServerId"`
 	Name              string                `json:"Name"`
+	SortName          string                `json:"SortName,omitempty"`
 	Type              string                `json:"Type"`
+	MediaType         string                `json:"MediaType,omitempty"`
+	CollectionType    string                `json:"CollectionType,omitempty"`
+	IsFolder          bool                  `json:"IsFolder,omitempty"`
 	Overview          string                `json:"Overview,omitempty"`
 	ProductionYear    int                   `json:"ProductionYear,omitempty"`
 	RunTimeTicks      int64                 `json:"RunTimeTicks,omitempty"`
@@ -119,15 +126,53 @@ func parseItemID(raw, wantKind string) (id uint, ok bool) {
 	return uint(n), true
 }
 
+// sortName is Jellyfin's SortName: lower-cased with a leading article dropped,
+// so "The Matrix" files under M like it does in real Jellyfin.
+func sortName(title string) string {
+	s := strings.ToLower(strings.TrimSpace(title))
+	for _, article := range []string{"the ", "a ", "an "} {
+		if strings.HasPrefix(s, article) && len(s) > len(article) {
+			return strings.TrimSpace(s[len(article):])
+		}
+	}
+	return s
+}
+
+// personNamespace seeds stable person ids. Jellyfin gives every cast member a
+// UUID that clients use as an identity (and UUID-typed SDKs require to parse);
+// TMDB cast names are all we store, so derive the id from the name.
+var personNamespace = uuid.NewSHA1(uuid.NameSpaceOID, []byte("magicboxie/person"))
+
+func personID(name string) string {
+	return uuid.NewSHA1(personNamespace, []byte(name)).String()
+}
+
+// movieStreams describes a movie's video and audio streams as Jellyfin
+// MediaStreams, in the order clients index them (video first).
+func movieStreams(m models.Movie) []jellyfinMediaStream {
+	var streams []jellyfinMediaStream
+	if m.VideoCodec != "" {
+		streams = append(streams, jellyfinMediaStream{Index: len(streams), Type: "Video", Codec: m.VideoCodec, IsDefault: true})
+	}
+	if m.AudioCodec != "" {
+		streams = append(streams, jellyfinMediaStream{Index: len(streams), Type: "Audio", Codec: m.AudioCodec, IsDefault: true})
+	}
+	return streams
+}
+
 func movieToItem(m models.Movie) jellyfinItem {
 	item := jellyfinItem{
 		Id:                          formatItemID("movie", m.ID),
+		ServerId:                    jellyfinServerID,
 		Name:                        m.Title,
+		SortName:                    sortName(m.Title),
 		Type:                        "Movie",
+		MediaType:                   "Video",
 		Overview:                    m.Overview,
 		ProductionYear:              m.Year,
 		RunTimeTicks:                int64(m.DurationSeconds * ticksPerSecond),
 		DateCreated:                 m.AddedAt.UTC().Format(time.RFC3339),
+		MediaStreams:                movieStreams(m),
 		MagicBoxieStatus:            m.Status,
 		MagicBoxieOriginalFilename:  m.OriginalFilename,
 		MagicBoxieNeedsReview:       m.NeedsReview,
@@ -143,7 +188,7 @@ func movieToItem(m models.Movie) jellyfinItem {
 	if m.CastJSON != "" {
 		_ = json.Unmarshal([]byte(m.CastJSON), &cast)
 		for _, c := range cast {
-			item.People = append(item.People, jellyfinPerson{Name: c.Name, Type: "Actor", Role: c.Character})
+			item.People = append(item.People, jellyfinPerson{Id: personID(c.Name), Name: c.Name, Type: "Actor", Role: c.Character})
 		}
 	}
 
@@ -159,21 +204,16 @@ func movieToItem(m models.Movie) jellyfinItem {
 		item.BackdropImageTags = []string{tag}
 	}
 
-	if m.VideoCodec != "" {
-		item.MediaStreams = append(item.MediaStreams, jellyfinMediaStream{Type: "Video", Codec: m.VideoCodec})
-	}
-	if m.AudioCodec != "" {
-		item.MediaStreams = append(item.MediaStreams, jellyfinMediaStream{Type: "Audio", Codec: m.AudioCodec})
-	}
-
 	return item
 }
 
 func artistToItem(a models.Artist) jellyfinItem {
 	item := jellyfinItem{
-		Id:   formatItemID("artist", a.ID),
-		Name: a.Name,
-		Type: "MusicArtist",
+		Id:       formatItemID("artist", a.ID),
+		ServerId: jellyfinServerID,
+		Name:     a.Name,
+		SortName: sortName(a.Name),
+		Type:     "MusicArtist",
 	}
 	if a.ImagePath != "" {
 		item.ImageTags = map[string]string{"Primary": "1"}
@@ -184,7 +224,9 @@ func artistToItem(a models.Artist) jellyfinItem {
 func albumToItem(al models.Album, artistName string) jellyfinItem {
 	item := jellyfinItem{
 		Id:             formatItemID("album", al.ID),
+		ServerId:       jellyfinServerID,
 		Name:           al.Title,
+		SortName:       sortName(al.Title),
 		Type:           "MusicAlbum",
 		ProductionYear: al.Year,
 		AlbumArtist:    artistName,
@@ -198,8 +240,11 @@ func albumToItem(al models.Album, artistName string) jellyfinItem {
 func trackToItem(t models.Track, albumTitle, artistName string) jellyfinItem {
 	item := jellyfinItem{
 		Id:                formatItemID("track", t.ID),
+		ServerId:          jellyfinServerID,
 		Name:              t.Title,
+		SortName:          sortName(t.Title),
 		Type:              "Audio",
+		MediaType:         "Audio",
 		RunTimeTicks:      int64(t.DurationSeconds * ticksPerSecond),
 		Album:             albumTitle,
 		AlbumArtist:       artistName,
@@ -208,112 +253,149 @@ func trackToItem(t models.Track, albumTitle, artistName string) jellyfinItem {
 		MagicBoxieStatus:  models.MovieStatusReady, // tracks need no compatibility processing
 	}
 	if t.Codec != "" {
-		item.MediaStreams = append(item.MediaStreams, jellyfinMediaStream{Type: "Audio", Codec: t.Codec})
+		item.MediaStreams = []jellyfinMediaStream{{Index: 0, Type: "Audio", Codec: t.Codec, IsDefault: true}}
 	}
 	return item
 }
 
 // Views returns the fixed top-level libraries ("Movies", "Music") a
-// Jellyfin client browses into via ParentId.
+// Jellyfin client browses into via ParentId. CollectionType matters beyond
+// cosmetics: e.g. Swiftfin's home screen builds a "Latest in <library>" row
+// only for views whose CollectionType is one of a known set (movies,
+// tvshows, musicvideos, homevideos) -- unlike its generic library browser,
+// it does not fall back to treating a missing CollectionType as a plain
+// folder, so omitting it silently hides the library from that screen even
+// though login and manual browsing still work.
 func (ic *ItemsController) Views(c *gin.Context) {
-	c.JSON(http.StatusOK, itemsResponse{
-		Items: []jellyfinItem{
-			{Id: "movies", Name: "Movies", Type: "CollectionFolder"},
-			{Id: "music", Name: "Music", Type: "CollectionFolder"},
-		},
-		TotalRecordCount: 2,
-	})
+	c.JSON(http.StatusOK, itemsResponse{Items: libraryViews, TotalRecordCount: len(libraryViews)})
 }
 
-// List handles GET /Users/{userId}/Items, branching on IncludeItemTypes to
-// serve movies, artists, albums, or tracks (with ParentId scoping the
-// artist->albums and album->tracks hierarchy).
+// ListItems handles GET /Items, Jellyfin's single item-listing endpoint: every
+// library, tab, search and "more like this" screen is a query against it
+// (scoped by parentId / includeItemTypes / filters, sorted and paged
+// server-side). It lists only what can actually be played.
+func (ic *ItemsController) ListItems(c *gin.Context) {
+	ic.list(c, false)
+}
+
+// List handles the pre-10.9 GET /Users/{userId}/Items. It is no longer part of
+// Jellyfin but the web UI and magicboxie-appletv still call it, and unlike
+// ListItems it includes movies that are still processing so the web UI can
+// show them under "Continue Processing".
 func (ic *ItemsController) List(c *gin.Context) {
-	switch c.Query("IncludeItemTypes") {
-	case "MusicArtist":
-		ic.listArtists(c)
-	case "MusicAlbum":
-		ic.listAlbums(c)
-	case "Audio":
-		ic.listTracks(c)
-	default:
-		ic.listMovies(c)
-	}
+	ic.list(c, true)
 }
 
-func (ic *ItemsController) listMovies(c *gin.Context) {
-	var movies []models.Movie
-	if err := ic.db.Order("added_at desc").Find(&movies).Error; err != nil {
+func (ic *ItemsController) list(c *gin.Context, includeUnready bool) {
+	q := parseItemsQuery(c, includeUnready)
+
+	items, err := ic.collectItems(q)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list items"})
 		return
 	}
-	items := make([]jellyfinItem, len(movies))
-	for i, m := range movies {
-		items[i] = movieToItem(m)
-	}
-	c.JSON(http.StatusOK, itemsResponse{Items: items, TotalRecordCount: len(items)})
+	items = q.filter(items)
+	q.sort(items)
+
+	c.JSON(http.StatusOK, itemsResponse{
+		Items:            q.page(items),
+		TotalRecordCount: len(items),
+		StartIndex:       q.startIndex,
+	})
 }
 
-func (ic *ItemsController) listArtists(c *gin.Context) {
-	var artists []models.Artist
-	if err := ic.db.Order("name asc").Find(&artists).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list artists"})
-		return
-	}
-	items := make([]jellyfinItem, len(artists))
-	for i, a := range artists {
-		items[i] = artistToItem(a)
-	}
-	c.JSON(http.StatusOK, itemsResponse{Items: items, TotalRecordCount: len(items)})
-}
+// collectItems loads every item in the query's scope (movies, artists,
+// albums and/or tracks) in each kind's natural order. Libraries here are a
+// household's worth of media, so filtering, sorting and paging happen over
+// the loaded set (see itemsQuery) rather than being translated into SQL.
+func (ic *ItemsController) collectItems(q itemsQuery) ([]jellyfinItem, error) {
+	sc := q.scope()
+	var items []jellyfinItem
 
-func (ic *ItemsController) listAlbums(c *gin.Context) {
-	query := ic.db.Order("title asc")
-	if parentID := c.Query("ParentId"); parentID != "" {
-		artistID, ok := parseItemID(parentID, "artist")
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ParentId"})
-			return
+	if sc.movies {
+		var movies []models.Movie
+		tx := ic.db.Order("added_at desc")
+		if !q.includeUnready {
+			tx = tx.Where("status = ?", models.MovieStatusReady)
 		}
-		query = query.Where("artist_id = ?", artistID)
+		if err := tx.Find(&movies).Error; err != nil {
+			return nil, err
+		}
+		for _, m := range movies {
+			items = append(items, movieToItem(m))
+		}
 	}
 
-	var albums []models.Album
-	if err := query.Find(&albums).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list albums"})
-		return
+	if !sc.artists && !sc.albums && !sc.tracks {
+		return items, nil
+	}
+	artistNames, albumsByID, err := ic.musicLookups()
+	if err != nil {
+		return nil, err
 	}
 
-	items := make([]jellyfinItem, len(albums))
-	for i, al := range albums {
-		items[i] = albumToItem(al, ic.artistName(al.ArtistID))
+	if sc.artists {
+		var artists []models.Artist
+		if err := ic.db.Order("name asc").Find(&artists).Error; err != nil {
+			return nil, err
+		}
+		for _, a := range artists {
+			items = append(items, artistToItem(a))
+		}
 	}
-	c.JSON(http.StatusOK, itemsResponse{Items: items, TotalRecordCount: len(items)})
+	if sc.albums {
+		var albums []models.Album
+		tx := ic.db.Order("title asc")
+		if sc.artistID != 0 {
+			tx = tx.Where("artist_id = ?", sc.artistID)
+		}
+		if err := tx.Find(&albums).Error; err != nil {
+			return nil, err
+		}
+		for _, al := range albums {
+			items = append(items, albumToItem(al, artistNames[al.ArtistID]))
+		}
+	}
+	if sc.tracks {
+		var tracks []models.Track
+		tx := ic.db.Order("disc_number asc, track_number asc")
+		switch {
+		case sc.albumID != 0:
+			tx = tx.Where("album_id = ?", sc.albumID)
+		case sc.artistID != 0:
+			tx = tx.Where("album_id IN (?)", ic.db.Model(&models.Album{}).Select("id").Where("artist_id = ?", sc.artistID))
+		}
+		if err := tx.Find(&tracks).Error; err != nil {
+			return nil, err
+		}
+		for _, t := range tracks {
+			album := albumsByID[t.AlbumID]
+			items = append(items, trackToItem(t, album.Title, artistNames[album.ArtistID]))
+		}
+	}
+	return items, nil
 }
 
-func (ic *ItemsController) listTracks(c *gin.Context) {
-	query := ic.db.Order("disc_number asc, track_number asc")
-	if parentID := c.Query("ParentId"); parentID != "" {
-		albumID, ok := parseItemID(parentID, "album")
-		if !ok {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ParentId"})
-			return
-		}
-		query = query.Where("album_id = ?", albumID)
+// musicLookups loads the artist names and albums needed to fill in the
+// AlbumArtist/Album fields of album and track items without a query per row.
+func (ic *ItemsController) musicLookups() (artistNames map[uint]string, albums map[uint]models.Album, err error) {
+	var artistRows []models.Artist
+	if err = ic.db.Find(&artistRows).Error; err != nil {
+		return nil, nil, err
 	}
-
-	var tracks []models.Track
-	if err := query.Find(&tracks).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list tracks"})
-		return
+	artistNames = make(map[uint]string, len(artistRows))
+	for _, a := range artistRows {
+		artistNames[a.ID] = a.Name
 	}
-
-	items := make([]jellyfinItem, len(tracks))
-	for i, t := range tracks {
-		albumTitle, artistName := ic.albumAndArtistName(t.AlbumID)
-		items[i] = trackToItem(t, albumTitle, artistName)
+	var albumRows []models.Album
+	if err = ic.db.Find(&albumRows).Error; err != nil {
+		return nil, nil, err
 	}
-	c.JSON(http.StatusOK, itemsResponse{Items: items, TotalRecordCount: len(items)})
+	albums = make(map[uint]models.Album, len(albumRows))
+	for _, al := range albumRows {
+		albums[al.ID] = al
+	}
+	return artistNames, albums, nil
 }
 
 func (ic *ItemsController) artistName(artistID uint) string {
@@ -332,31 +414,55 @@ func (ic *ItemsController) albumAndArtistName(albumID uint) (albumTitle, artistN
 	return album.Title, ic.artistName(album.ArtistID)
 }
 
+// EmptyItems answers the home-screen rows MagicBoxie has nothing for --
+// "Continue Watching" (no watch history is kept) and "Next Up" (no TV) --
+// with a valid, empty page. Unknown endpoints would 404, and Swiftfin fails
+// its whole home screen if any one row errors.
+func (ic *ItemsController) EmptyItems(c *gin.Context) {
+	c.JSON(http.StatusOK, itemsResponse{Items: []jellyfinItem{}})
+}
+
 // Latest returns a bare array (not the paging envelope) of the most
-// recently-ready movies, matching magicboxie-appletv's
-// MovieService.fetchLatestMovies() expectation exactly.
+// recently-ready movies, as GET /Items/Latest -- and the legacy
+// /Users/{userId}/Items/Latest -- do in Jellyfin. parentId scopes it to a
+// library; music has no "latest" here, so that library's row is empty.
 func (ic *ItemsController) Latest(c *gin.Context) {
 	limit := 20
-	if v, err := strconv.Atoi(c.Query("Limit")); err == nil && v > 0 {
+	if v, ok := queryInt(c, "limit"); ok && v > 0 {
 		limit = v
 	}
-
-	var movies []models.Movie
-	if err := ic.db.Where("status = ?", models.MovieStatusReady).
-		Order("added_at desc").Limit(limit).Find(&movies).Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list latest items"})
-		return
-	}
-	items := make([]jellyfinItem, len(movies))
-	for i, m := range movies {
-		items[i] = movieToItem(m)
+	items := []jellyfinItem{}
+	if parent := queryString(c, "parentId"); parent == "" || parent == "movies" {
+		var movies []models.Movie
+		if err := ic.db.Where("status = ?", models.MovieStatusReady).
+			Order("added_at desc").Limit(limit).Find(&movies).Error; err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list latest items"})
+			return
+		}
+		for _, m := range movies {
+			items = append(items, movieToItem(m))
+		}
 	}
 	c.JSON(http.StatusOK, items)
 }
 
-// Detail handles GET /Users/{userId}/Items/{itemId} for any item kind.
+// libraryViews are the fixed top-level libraries a client browses into.
+var libraryViews = []jellyfinItem{
+	{Id: "movies", ServerId: jellyfinServerID, Name: "Movies", SortName: "movies", Type: "CollectionFolder", CollectionType: "movies", IsFolder: true},
+	{Id: "music", ServerId: jellyfinServerID, Name: "Music", SortName: "music", Type: "CollectionFolder", CollectionType: "music", IsFolder: true},
+}
+
+// Detail handles GET /Items/{itemId} -- and the legacy
+// GET /Users/{userId}/Items/{itemId} -- for any item kind, including the
+// library views themselves (clients look up the view they just opened).
 func (ic *ItemsController) Detail(c *gin.Context) {
 	raw := c.Param("itemId")
+	for _, view := range libraryViews {
+		if raw == view.Id {
+			c.JSON(http.StatusOK, view)
+			return
+		}
+	}
 	kind, _, _ := strings.Cut(raw, "-")
 
 	switch kind {
@@ -455,6 +561,38 @@ func (ic *ItemsController) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+// jellyfinMediaSource is Jellyfin's MediaSourceInfo: one playable version of
+// an item. Clients pick a source, then build the stream URL themselves
+// (/Videos/{id}/stream?static=true&mediaSourceId=...), so what matters is that
+// the container, streams and Supports* flags describe the file truthfully.
+type jellyfinMediaSource struct {
+	Id                   string                `json:"Id"`
+	Protocol             string                `json:"Protocol"`
+	Type                 string                `json:"Type"`
+	Path                 string                `json:"Path,omitempty"`
+	Name                 string                `json:"Name"`
+	Container            string                `json:"Container"`
+	Size                 int64                 `json:"Size,omitempty"`
+	RunTimeTicks         int64                 `json:"RunTimeTicks,omitempty"`
+	Bitrate              int                   `json:"Bitrate,omitempty"`
+	IsRemote             bool                  `json:"IsRemote"`
+	SupportsDirectPlay   bool                  `json:"SupportsDirectPlay"`
+	SupportsDirectStream bool                  `json:"SupportsDirectStream"`
+	SupportsTranscoding  bool                  `json:"SupportsTranscoding"`
+	MediaStreams         []jellyfinMediaStream `json:"MediaStreams"`
+}
+
+type jellyfinPlaybackInfo struct {
+	MediaSources  []jellyfinMediaSource `json:"MediaSources"`
+	PlaySessionId string                `json:"PlaySessionId,omitempty"`
+	ErrorCode     string                `json:"ErrorCode,omitempty"`
+}
+
+// PlaybackInfo handles GET and POST /Items/{itemId}/PlaybackInfo (clients use
+// POST when they send a device profile). Files are always served as-is, so a
+// playable item has exactly one directly-playable source regardless of the
+// profile; an item that isn't playable yet has none, which clients report as
+// "no compatible stream" instead of chasing a stream URL that will 409.
 func (ic *ItemsController) PlaybackInfo(c *gin.Context) {
 	raw := c.Param("itemId")
 	kind, _, _ := strings.Cut(raw, "-")
@@ -464,15 +602,22 @@ func (ic *ItemsController) PlaybackInfo(c *gin.Context) {
 		if !ok {
 			return
 		}
-		c.JSON(http.StatusOK, gin.H{
-			"MediaSources": []gin.H{{
-				"Id":                   formatItemID("track", track.ID),
-				"Path":                 track.FileRelpath,
-				"Container":            track.Codec,
-				"SupportsDirectPlay":   true,
-				"SupportsDirectStream": true,
+		id := formatItemID("track", track.ID)
+		c.JSON(http.StatusOK, jellyfinPlaybackInfo{
+			PlaySessionId: uuid.NewString(),
+			MediaSources: []jellyfinMediaSource{{
+				Id:                   id,
+				Protocol:             "File",
+				Type:                 "Default",
+				Path:                 track.FileRelpath,
+				Name:                 track.Title,
+				Container:            strings.TrimPrefix(strings.ToLower(filepath.Ext(track.FileRelpath)), "."),
+				RunTimeTicks:         int64(track.DurationSeconds * ticksPerSecond),
+				Bitrate:              track.Bitrate,
+				SupportsDirectPlay:   true,
+				SupportsDirectStream: true,
+				MediaStreams:         []jellyfinMediaStream{{Index: 0, Type: "Audio", Codec: track.Codec, IsDefault: true}},
 			}},
-			"PlaySessionId": uuid.NewString(),
 		})
 		return
 	}
@@ -481,18 +626,53 @@ func (ic *ItemsController) PlaybackInfo(c *gin.Context) {
 	if !ok {
 		return
 	}
-	ready := movie.Status == models.MovieStatusReady
-	c.JSON(http.StatusOK, gin.H{
-		"MediaSources": []gin.H{{
-			"Id":                   formatItemID("movie", movie.ID),
-			"Path":                 movie.OriginalFilename,
-			"Container":            "mp4",
-			"SupportsDirectPlay":   ready,
-			"SupportsDirectStream": ready,
-			"Bitrate":              4000000,
+	if movie.Status != models.MovieStatusReady || movie.PlayableRelpath == "" {
+		c.JSON(http.StatusOK, jellyfinPlaybackInfo{MediaSources: []jellyfinMediaSource{}, ErrorCode: "NoCompatibleStream"})
+		return
+	}
+	streams := movieStreams(movie)
+	if streams == nil {
+		streams = []jellyfinMediaStream{}
+	}
+	c.JSON(http.StatusOK, jellyfinPlaybackInfo{
+		PlaySessionId: uuid.NewString(),
+		MediaSources: []jellyfinMediaSource{{
+			Id:                   formatItemID("movie", movie.ID),
+			Protocol:             "File",
+			Type:                 "Default",
+			Path:                 movie.OriginalFilename,
+			Name:                 movie.Title,
+			Container:            strings.TrimPrefix(strings.ToLower(filepath.Ext(movie.PlayableRelpath)), "."),
+			Size:                 movie.FileSizeBytes,
+			RunTimeTicks:         int64(movie.DurationSeconds * ticksPerSecond),
+			Bitrate:              4000000,
+			SupportsDirectPlay:   true,
+			SupportsDirectStream: true,
+			MediaStreams:         streams,
 		}},
-		"PlaySessionId": uuid.NewString(),
 	})
+}
+
+// ItemImage handles GET/HEAD /Items/{itemId}/Images/{imageType}[/{imageIndex}].
+// Only Primary (poster / album cover) and Backdrop exist for a movie; clients
+// probe for whatever their layout wants (Logo, Thumb, Banner...) and treat a
+// 404 as "none", so every other type must 404 as JSON. "Thumbnail" is a
+// MagicBoxie extension: the candidate poster stills (see ThumbnailCandidates).
+func (ic *ItemsController) ItemImage(c *gin.Context) {
+	switch strings.ToLower(c.Param("imageType")) {
+	case "primary":
+		ic.PrimaryImage(c)
+	case "backdrop":
+		if index := c.Param("imageIndex"); index != "" && index != "0" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "no such backdrop"})
+			return
+		}
+		ic.BackdropImage(c)
+	case "thumbnail":
+		ic.ThumbnailCandidateImage(c)
+	default:
+		c.JSON(http.StatusNotFound, gin.H{"error": "no such image"})
+	}
 }
 
 // PrimaryImage serves the poster for a movie or the cover art for an album.
@@ -551,7 +731,7 @@ func (ic *ItemsController) ThumbnailCandidateImage(c *gin.Context) {
 	if !ok {
 		return
 	}
-	index, err := strconv.Atoi(c.Param("index"))
+	index, err := strconv.Atoi(c.Param("imageIndex"))
 	if err != nil || index < 0 || index > 4 {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid thumbnail index"})
 		return

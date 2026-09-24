@@ -1,8 +1,8 @@
 BINARY := magicboxie
 IMAGE := magicboxie
-# Local dev (run-local/dev) listens on :8090, separate from Docker's :8080
-# (docker-compose.yml), so both can run side by side without a port clash.
-URL := $(if $(MAGICBOXIE_URL),$(MAGICBOXIE_URL),http://localhost:8090)
+# dev/run listen on Docker's :8080 (docker-compose.yml); run-local listens
+# on :8090 instead so it can run side by side without a port clash.
+URL := $(if $(MAGICBOXIE_URL),$(MAGICBOXIE_URL),http://localhost:8080)
 
 # Raspberry Pi (Raspbian/Raspberry Pi OS) bare-metal target: builds and
 # runs directly on the Pi via systemd (deploy/systemd/magicboxie.service)
@@ -22,7 +22,7 @@ PI_CONTENT_DIR ?= /content
 # magicboxie-device Pi find this server without a fixed/static IP.
 PI_HOSTNAME ?= magicboxie
 
-.PHONY: default build build-local build-web build-go run run-local dev restart deploy publish open test tidy setup pi-setup pi-install pi-run pi-logs
+.PHONY: default build build-local build-web build-go run run-local dev restart deploy publish open test test-docker tidy setup pi-setup pi-install pi-run pi-logs
 
 # Keep the no-argument workflow aligned with `make dev`.
 default: dev
@@ -72,26 +72,26 @@ run-local: build-local
 	@mkdir -p content/movies content/music data
 	MAGICBOXIE_CONFIG=configs/magicboxie.local.yaml ./bin/$(BINARY)
 
-# Same as run-local, but also opens the server in the browser once it's
-# ready to accept connections. Ctrl+C stops the server.
-dev: build-local
-	@test -f configs/magicboxie.local.yaml || { \
-		echo "configs/magicboxie.local.yaml not found -- copy configs/magicboxie.example.yaml," \
-		     "point movies_dir/music_dir/data_dir at local paths (e.g. content/movies," \
-		     "content/music, data), and set auth.password_hash." ; \
-		exit 1 ; \
+# Same as run, but also opens the server in the browser once it's ready to
+# accept connections. Ctrl+C stops the server (docker compose up runs in
+# the foreground).
+dev:
+	@test -f configs/magicboxie.yaml || { \
+		cp configs/magicboxie.example.yaml configs/magicboxie.yaml; \
+		echo "Created configs/magicboxie.yaml from the example -- set auth.password_hash" \
+		     "(generate one with: docker run --rm $(IMAGE) hash-password '<password>')" \
+		     "before logging in."; \
 	}
-	@mkdir -p content/movies content/music data
 	@( \
 		i=0 ; \
-		until curl -sf "$(URL)" >/dev/null 2>&1 || [ $$i -ge 100 ]; do sleep 0.2; i=$$((i+1)); done ; \
+		until curl -sf "$(URL)" >/dev/null 2>&1 || [ $$i -ge 600 ]; do sleep 0.2; i=$$((i+1)); done ; \
 		if curl -sf "$(URL)" >/dev/null 2>&1; then \
 			$(MAKE) open ; \
 		else \
-			echo "Server did not respond at $(URL) within 20s -- not opening browser" >&2 ; \
+			echo "Server did not respond at $(URL) within 2m -- not opening browser" >&2 ; \
 		fi \
 	) &
-	MAGICBOXIE_CONFIG=configs/magicboxie.local.yaml ./bin/$(BINARY)
+	docker compose up --build
 
 restart: build-local
 	@test -f configs/magicboxie.local.yaml || { \
@@ -195,6 +195,14 @@ open:
 
 test:
 	go test ./...
+
+# Same suite (including the Jellyfin API-conformance tests) in a throwaway Go
+# container, for machines without a local Go toolchain. Module and build
+# caches live in named volumes so repeat runs are fast.
+test-docker:
+	docker run --rm -v "$(CURDIR)":/src -w /src \
+		-v magicboxie-gomod:/go/pkg/mod -v magicboxie-gobuild:/root/.cache/go-build \
+		golang:1.26 go test ./...
 
 tidy:
 	go mod tidy
