@@ -12,13 +12,16 @@ import (
 
 var mediaBrowserTokenRe = regexp.MustCompile(`Token="([^"]*)"`)
 
-// RequireAuth accepts Jellyfin and generic token transports, in priority order:
-//  1. A Jellyfin-style "Authorization: MediaBrowser ...Token="..."" header
-//     (what magicboxie-appletv's JellyfinClient sends).
-//  2. Jellyfin's X-Emby-Token header (used by Swiftfin and generated SDKs).
-//  3. A plain "Authorization: Bearer <token>" header (simpler clients).
-//  4. A "?api_key=<token>" query param -- Jellyfin's convention for URLs
-//     that can't carry headers (<video>/<img> tags, AVPlayer, EventSource).
+// RequireAuth accepts every token transport Jellyfin's own server does, plus
+// a plain bearer token, in priority order:
+//  1. A "MediaBrowser ...Token="..."" credential in the Authorization header
+//     (Swiftfin, the Kotlin SDK, magicboxie-appletv) or in X-Emby-Authorization
+//     (older clients and SDKs, jellyfin-web, Kodi).
+//  2. The X-Emby-Token or X-MediaBrowser-Token header.
+//  3. A plain "Authorization: Bearer <token>" header (MagicBoxie's web UI).
+//  4. A "?api_key=<token>" (or "?ApiKey=") query param -- Jellyfin's convention
+//     for URLs that can't carry headers (<video>/<img> tags, AVPlayer,
+//     EventSource).
 func RequireAuth(manager *auth.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := extractToken(c)
@@ -35,17 +38,25 @@ func RequireAuth(manager *auth.Manager) gin.HandlerFunc {
 }
 
 func extractToken(c *gin.Context) string {
-	header := c.GetHeader("Authorization")
-	if strings.HasPrefix(header, "MediaBrowser ") {
-		if m := mediaBrowserTokenRe.FindStringSubmatch(header); m != nil {
-			return m[1]
+	for _, name := range []string{"Authorization", "X-Emby-Authorization"} {
+		if header := c.GetHeader(name); strings.HasPrefix(header, "MediaBrowser ") {
+			if m := mediaBrowserTokenRe.FindStringSubmatch(header); m != nil {
+				return m[1]
+			}
 		}
 	}
-	if token := c.GetHeader("X-Emby-Token"); token != "" {
-		return token
+	for _, name := range []string{"X-Emby-Token", "X-MediaBrowser-Token"} {
+		if token := c.GetHeader(name); token != "" {
+			return token
+		}
 	}
-	if strings.HasPrefix(header, "Bearer ") {
+	if header := c.GetHeader("Authorization"); strings.HasPrefix(header, "Bearer ") {
 		return strings.TrimPrefix(header, "Bearer ")
 	}
-	return c.Query("api_key")
+	for key, values := range c.Request.URL.Query() {
+		if (strings.EqualFold(key, "api_key") || strings.EqualFold(key, "ApiKey")) && len(values) > 0 {
+			return values[0]
+		}
+	}
+	return ""
 }

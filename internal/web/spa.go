@@ -34,19 +34,30 @@ func RegisterSPA(router *gin.Engine, fsys http.FileSystem) {
 	})
 }
 
-// isAPIPath prevents unknown Jellyfin endpoints from receiving index.html
-// with a misleading 200 response. Generated clients otherwise attempt to
-// decode the HTML as JSON and surface an opaque data-format error.
+// isAPIPath reports whether path belongs to the server's API rather than the
+// web app. Unknown API paths must 404 as JSON: falling through to index.html
+// answers 200 text/html, which generated Jellyfin clients then fail to decode
+// with an opaque "data format" error instead of a clean 404.
+//
+// The two namespaces split cleanly by case. Every Jellyfin endpoint's first
+// path segment is capitalised (/Items, /Users, /System, /Genres ...) while all
+// of the web app's routes and assets are lower-case (/login, /movies, /music,
+// /admin, /assets). That rule covers Jellyfin's whole API -- including
+// endpoints we don't serve -- without a list to keep in step with it; the
+// remaining lower-case prefixes are MagicBoxie's own API, Jellyfin's
+// WebSocket, and Jellyfin's one lower-case REST path (/web/ConfigurationPage,
+// its plugin admin pages).
 func isAPIPath(path string) bool {
-	for _, prefix := range []string{
-		"/api/", "/Audio/", "/Branding/", "/Devices/", "/DisplayPreferences/",
-		"/Items/", "/Library/", "/LiveTv/", "/MediaSegments/", "/MusicGenres/",
-		"/Persons/", "/Playlists/", "/QuickConnect/", "/Sessions/", "/Shows/",
-		"/System/", "/UserImage", "/Users/", "/UserViews", "/Videos/", "/socket",
-	} {
-		if strings.HasPrefix(path, prefix) {
-			return true
-		}
+	first, _, _ := strings.Cut(strings.TrimPrefix(path, "/"), "/")
+	if first == "" {
+		return false
+	}
+	if c := first[0]; c >= 'A' && c <= 'Z' {
+		return true
+	}
+	switch first {
+	case "api", "socket", "devices", "web":
+		return true
 	}
 	return false
 }
