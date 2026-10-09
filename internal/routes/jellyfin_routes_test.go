@@ -32,6 +32,7 @@ var legacyRoutes = map[string]string{
 var extensionRoutes = map[string]string{
 	"POST /devices/register":      "magicboxie-device Pi check-in",
 	"GET /Videos/:itemId/preview": "short muted preview clip for the web UI",
+	"GET /Videos/:itemId/player":  "480p copy magicboxie-player downloads",
 	"GET /socket":                 "Jellyfin's WebSocket endpoint; not an OpenAPI operation. Stubbed as 404",
 }
 

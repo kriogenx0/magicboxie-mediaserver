@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"magicboxie/internal/models"
+	"magicboxie/internal/services/transcode"
 )
 
 type VideosController struct {
@@ -90,4 +91,26 @@ func (vc *VideosController) Stream(c *gin.Context) {
 	// detection -- OriginalFilename is a historical record and may have a
 	// stale extension (e.g. .mkv) once a transcode has replaced the file.
 	ServeFileRange(c, fullPath, filepath.Base(movie.PlayableRelpath))
+}
+
+// Player serves a movie's 480p copy made for magicboxie-player (a
+// MagicBoxie extension; see Movie.PlayerStatus), with Range support like
+// Stream. 409 until the copy is ready.
+func (vc *VideosController) Player(c *gin.Context) {
+	id, ok := parseItemID(c.Param("itemId"), "movie")
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+
+	var movie models.Movie
+	if err := vc.db.First(&movie, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "item not found"})
+		return
+	}
+	if movie.PlayerStatus != models.PlayerStatusReady {
+		c.JSON(http.StatusConflict, gin.H{"error": "player copy is not ready yet"})
+		return
+	}
+	ServeFileRange(c, transcode.PlayerCopyPath(vc.dataDir, movie.ID), "player.mp4")
 }

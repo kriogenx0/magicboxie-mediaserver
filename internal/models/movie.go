@@ -12,6 +12,15 @@ const (
 	MovieStatusError          = "error"
 )
 
+// Player copy statuses (Movie.PlayerStatus): the 480p rendition made for
+// magicboxie-player, stored under <data_dir>/player/<id>.mp4. Empty means
+// none has been asked for yet (only device-synced movies get one).
+const (
+	PlayerStatusPending = "pending"
+	PlayerStatusReady   = "ready"
+	PlayerStatusError   = "error"
+)
+
 type Movie struct {
 	ID                uint      `gorm:"primaryKey" json:"id"`
 	Title             string    `gorm:"not null" json:"title"`
@@ -36,6 +45,7 @@ type Movie struct {
 	Status            string    `gorm:"not null;default:pending" json:"status"`
 	NeedsReview       bool      `json:"needs_review"`
 	SyncEnabled       bool      `json:"sync_enabled"`
+	PlayerStatus      string    `json:"player_status"`
 	ErrorMessage      string    `json:"error_message,omitempty"`
 	AddedAt           time.Time `gorm:"not null;autoCreateTime" json:"added_at"`
 	UpdatedAt         time.Time `gorm:"not null;autoUpdateTime" json:"updated_at"`

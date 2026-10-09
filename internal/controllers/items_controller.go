@@ -22,6 +22,7 @@ import (
 	"magicboxie/internal/services/library"
 	"magicboxie/internal/services/music"
 	"magicboxie/internal/services/tmdb"
+	"magicboxie/internal/services/transcode"
 )
 
 type ItemsController struct {
@@ -30,6 +31,10 @@ type ItemsController struct {
 	musicImporter *music.Importer
 	moviesDir     string
 	dataDir       string
+
+	// OnSyncEnabled is invoked (if set) when a movie is marked for device
+	// sync, so the transcode manager can make its 480p player copy.
+	OnSyncEnabled func(movieID uint)
 }
 
 func NewItemsController(db *gorm.DB, importer *library.Importer, musicImporter *music.Importer, moviesDir, dataDir string) *ItemsController {
@@ -97,6 +102,9 @@ type jellyfinItem struct {
 	MagicBoxieNeedsReview       bool     `json:"MagicBoxieNeedsReview"`
 	MagicBoxiePosterIsGenerated bool     `json:"MagicBoxiePosterIsGenerated"`
 	MagicBoxieSyncEnabled       bool     `json:"MagicBoxieSyncEnabled"`
+	// The 480p copy magicboxie-player downloads from /Videos/{id}/player:
+	// "" (not asked for), "pending", "ready" or "error".
+	MagicBoxiePlayerStatus string `json:"MagicBoxiePlayerStatus,omitempty"`
 }
 
 type itemsResponse struct {
@@ -178,6 +186,7 @@ func movieToItem(m models.Movie) jellyfinItem {
 		MagicBoxieNeedsReview:       m.NeedsReview,
 		MagicBoxiePosterIsGenerated: m.PosterIsGenerated,
 		MagicBoxieSyncEnabled:       m.SyncEnabled,
+		MagicBoxiePlayerStatus:      m.PlayerStatus,
 	}
 
 	if m.GenresJSON != "" {
@@ -558,6 +567,7 @@ func (ic *ItemsController) Delete(c *gin.Context) {
 	_ = os.Remove(filepath.Join(ic.dataDir, "images", "posters", fmt.Sprintf("%d.jpg", movie.ID)))
 	_ = os.Remove(filepath.Join(ic.dataDir, "images", "backdrops", fmt.Sprintf("%d.jpg", movie.ID)))
 	_ = os.Remove(filepath.Join(ic.dataDir, "previews", fmt.Sprintf("%d.mp4", movie.ID)))
+	_ = os.Remove(transcode.PlayerCopyPath(ic.dataDir, movie.ID))
 	c.Status(http.StatusNoContent)
 }
 
@@ -829,6 +839,10 @@ func (ic *ItemsController) SetDeviceSync(c *gin.Context) {
 	if err := ic.db.Save(&movie).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update movie"})
 		return
+	}
+	if movie.SyncEnabled && ic.OnSyncEnabled != nil {
+		ic.OnSyncEnabled(movie.ID)
+		ic.db.First(&movie, movie.ID)
 	}
 	c.JSON(http.StatusOK, movieToItem(movie))
 }

@@ -348,6 +348,7 @@ func (s *testServer) seedLibrary(gormDB *gorm.DB, cfg *config.Config) {
 	write(filepath.Join(cfg.DataDir, "images", "posters", "1.jpg"), s.poster)
 	write(filepath.Join(cfg.DataDir, "images", "backdrops", "1.jpg"), s.poster)
 	write(filepath.Join(cfg.MoviesDir, "toy_story.mp4"), s.movieFile)
+	write(filepath.Join(cfg.DataDir, "player", "1.mp4"), s.movieFile[:512])
 	write(filepath.Join(cfg.MusicDir, "kob", "01 So What.flac"), s.trackFile)
 	write(filepath.Join(cfg.MusicDir, "kob", "02 Freddie Freeloader.flac"), s.trackFile)
 
@@ -363,7 +364,7 @@ func (s *testServer) seedLibrary(gormDB *gorm.DB, cfg *config.Config) {
 			PosterPath: "posters/1.jpg", BackdropPath: "backdrops/1.jpg",
 			OriginalFilename: "toy_story.mkv", SourceRelpath: "toy_story.mkv", PlayableRelpath: "toy_story.mp4",
 			FileSizeBytes: int64(len(s.movieFile)), DurationSeconds: 4860, VideoCodec: "h264", AudioCodec: "aac", Container: "mp4",
-			Status: models.MovieStatusReady, AddedAt: base.Add(1 * time.Hour)},
+			Status: models.MovieStatusReady, PlayerStatus: models.PlayerStatusReady, AddedAt: base.Add(1 * time.Hour)},
 		{ID: 2, Title: "Heat", Year: 1995, GenresJSON: `["Crime","Drama","Thriller"]`,
 			OriginalFilename: "heat.mp4", SourceRelpath: "heat.mp4", PlayableRelpath: "heat.mp4",
 			DurationSeconds: 10200, VideoCodec: "h264", AudioCodec: "aac", Container: "mp4",

@@ -1,5 +1,6 @@
 // Package transcode runs background ffmpeg transcode jobs for movies that
-// aren't already browser/iOS compatible: a small in-process worker pool
+// aren't already browser/iOS compatible, plus the small 480p copies
+// magicboxie-player downloads (see PlayerFFmpegArgs): a small in-process worker pool
 // (no external broker needed for a single-box personal server), with DB-
 // backed job state so progress survives a server restart.
 package transcode
@@ -25,29 +26,56 @@ import (
 
 const progressUpdateInterval = 1 * time.Second
 
+// PlayerFFmpegArgs is the video/audio encoding for magicboxie-player's copy:
+// 480p at most (never upscaled), H.264 Baseline - no CABAC or B-frames, the
+// most CPU-expensive parts of decode - which the player's Pi Zero can play
+// smoothly. Matches what the player would otherwise encode for itself.
+var PlayerFFmpegArgs = []string{
+	"-vf", "scale=-2:'min(480,ih)'",
+	"-c:v", "libx264",
+	"-profile:v", "baseline",
+	"-level", "3.1",
+	"-pix_fmt", "yuv420p", // Baseline is 8-bit 4:2:0 only (10-bit/4:4:4 sources)
+	"-c:a", "aac",
+	"-b:a", "128k",
+	"-ac", "2",
+}
+
 type Manager struct {
 	db            *gorm.DB
 	moviesDir     string
+	dataDir       string
 	preset        string
 	crf           int
 	maxConcurrent int
 	hub           *events.Hub
 
-	queue chan uint // movie IDs awaiting a worker
+	queue chan queuedJob // jobs awaiting a worker
 }
 
-func NewManager(db *gorm.DB, moviesDir, preset string, crf, maxConcurrent int, hub *events.Hub) *Manager {
+type queuedJob struct {
+	movieID uint
+	jobType string
+}
+
+// PlayerCopyPath is where a movie's 480p copy for magicboxie-player lives.
+func PlayerCopyPath(dataDir string, movieID uint) string {
+	return filepath.Join(dataDir, "player", fmt.Sprintf("%d.mp4", movieID))
+}
+
+func NewManager(db *gorm.DB, moviesDir, dataDir, preset string, crf, maxConcurrent int, hub *events.Hub) *Manager {
 	if maxConcurrent < 1 {
 		maxConcurrent = 1
 	}
 	return &Manager{
 		db:            db,
 		moviesDir:     moviesDir,
+		dataDir:       dataDir,
 		preset:        preset,
 		crf:           crf,
 		maxConcurrent: maxConcurrent,
 		hub:           hub,
-		queue:         make(chan uint, 256),
+		queue:         make(chan queuedJob, 256),
 	}
 }
 
@@ -85,7 +113,16 @@ func (m *Manager) Start(ctx context.Context) {
 	}
 
 	for _, job := range staleJobs {
-		m.queue <- job.MovieID
+		m.queue <- queuedJob{movieID: job.MovieID, jobType: job.Type}
+	}
+
+	// Device-synced movies still missing their player copy (synced before
+	// this existed, or its job was lost) get one now.
+	var needPlayerCopy []models.Movie
+	m.db.Where("status = ? AND sync_enabled = ? AND player_status IN ?",
+		models.MovieStatusReady, true, []string{"", models.PlayerStatusPending}).Find(&needPlayerCopy)
+	for _, movie := range needPlayerCopy {
+		m.EnqueuePlayer(movie.ID)
 	}
 }
 
@@ -96,7 +133,36 @@ func (m *Manager) Enqueue(movieID uint) {
 		log.Printf("transcode: failed to create job for movie %d: %v", movieID, err)
 		return
 	}
-	m.queue <- movieID
+	m.queue <- queuedJob{movieID: movieID, jobType: models.JobTypeTranscode}
+}
+
+// EnqueuePlayer queues the 480p copy magicboxie-player downloads, for a
+// ready, device-synced movie that doesn't have one yet. A no-op otherwise,
+// so it's safe to call whenever a movie might have become eligible.
+func (m *Manager) EnqueuePlayer(movieID uint) {
+	var movie models.Movie
+	if err := m.db.First(&movie, movieID).Error; err != nil {
+		return
+	}
+	if movie.Status != models.MovieStatusReady || !movie.SyncEnabled || movie.PlayerStatus == models.PlayerStatusReady {
+		return
+	}
+	var active int64
+	m.db.Model(&models.Job{}).
+		Where("movie_id = ? AND type = ? AND status IN ?", movieID, models.JobTypePlayerTranscode, []string{models.JobStatusQueued, models.JobStatusRunning}).
+		Count(&active)
+	if active > 0 {
+		return
+	}
+	job := &models.Job{MovieID: movieID, Type: models.JobTypePlayerTranscode, Status: models.JobStatusQueued}
+	if err := m.db.Create(job).Error; err != nil {
+		log.Printf("transcode: failed to create player job for movie %d: %v", movieID, err)
+		return
+	}
+	m.db.Model(&movie).Update("player_status", models.PlayerStatusPending)
+	// Called from workers too (after a transcode finishes): never block one
+	// on its own full queue.
+	go func() { m.queue <- queuedJob{movieID: movieID, jobType: models.JobTypePlayerTranscode} }()
 }
 
 func (m *Manager) worker(ctx context.Context) {
@@ -104,8 +170,12 @@ func (m *Manager) worker(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case movieID := <-m.queue:
-			m.process(ctx, movieID)
+		case queued := <-m.queue:
+			if queued.jobType == models.JobTypePlayerTranscode {
+				m.processPlayer(ctx, queued.movieID)
+			} else {
+				m.process(ctx, queued.movieID)
+			}
 		}
 	}
 }
@@ -136,7 +206,12 @@ func (m *Manager) process(ctx context.Context, movieID uint) {
 	}
 	tmpOutPath := filepath.Join(tmpDir, fmt.Sprintf("%d.mp4", movie.ID))
 
-	if err := m.runFFmpeg(ctx, &job, &movie, srcPath, tmpOutPath); err != nil {
+	if err := m.runFFmpeg(ctx, &job, &movie, srcPath, tmpOutPath, []string{
+		"-vf", "scale=-2:'min(1080,ih)'",
+		"-c:v", "libx264",
+		"-c:a", "aac",
+		"-b:a", "192k",
+	}); err != nil {
 		os.Remove(tmpOutPath)
 		m.fail(&job, &movie, err)
 		return
@@ -175,6 +250,60 @@ func (m *Manager) process(ctx context.Context, movieID uint) {
 		"job_id":   job.ID,
 		"status":   models.MovieStatusReady,
 	}})
+
+	m.EnqueuePlayer(movie.ID)
+}
+
+// processPlayer encodes a movie's 480p copy for magicboxie-player next to
+// (never replacing) its full-quality file. A failure only marks the player
+// copy as failed - the movie itself stays ready, and the player falls back
+// to downloading the full file and encoding it itself.
+func (m *Manager) processPlayer(ctx context.Context, movieID uint) {
+	var movie models.Movie
+	if err := m.db.First(&movie, movieID).Error; err != nil {
+		log.Printf("transcode: movie %d not found: %v", movieID, err)
+		return
+	}
+
+	var job models.Job
+	if err := m.db.Where("movie_id = ? AND type = ? AND status = ?", movieID, models.JobTypePlayerTranscode, models.JobStatusQueued).
+		Order("created_at desc").First(&job).Error; err != nil {
+		log.Printf("transcode: no queued player job found for movie %d: %v", movieID, err)
+		return
+	}
+
+	now := time.Now()
+	m.db.Model(&job).Updates(map[string]interface{}{"status": models.JobStatusRunning, "started_at": now})
+
+	finalPath := PlayerCopyPath(m.dataDir, movie.ID)
+	tmpOutPath := strings.TrimSuffix(finalPath, ".mp4") + ".partial.mp4"
+	err := os.MkdirAll(filepath.Dir(finalPath), 0o755)
+	if err == nil {
+		err = m.runFFmpeg(ctx, &job, &movie, filepath.Join(m.moviesDir, movie.PlayableRelpath), tmpOutPath, PlayerFFmpegArgs)
+	}
+	if err == nil {
+		err = os.Rename(tmpOutPath, finalPath)
+	}
+	if err != nil {
+		os.Remove(tmpOutPath)
+		log.Printf("transcode: player copy of movie %d failed: %v", movie.ID, err)
+		finishedAt := time.Now()
+		m.db.Model(&job).Updates(map[string]interface{}{
+			"status":      models.JobStatusFailed,
+			"log_tail":    truncate(err.Error(), 4000),
+			"finished_at": finishedAt,
+		})
+		m.db.Model(&movie).Update("player_status", models.PlayerStatusError)
+		return
+	}
+
+	m.db.Model(&movie).Update("player_status", models.PlayerStatusReady)
+	finishedAt := time.Now()
+	m.db.Model(&job).Updates(map[string]interface{}{
+		"status":           models.JobStatusCompleted,
+		"progress_percent": 100,
+		"finished_at":      finishedAt,
+	})
 }
 
 // finalize deletes the (now-superseded) original source file -- per the
@@ -237,21 +366,17 @@ func truncate(s string, n int) string {
 // services package free of any dependency on the HTTP/controller layer.
 type eventData = map[string]interface{}
 
-func (m *Manager) runFFmpeg(ctx context.Context, job *models.Job, movie *models.Movie, srcPath, outPath string) error {
-	args := []string{
-		"-y",
-		"-i", srcPath,
-		"-vf", "scale=-2:'min(1080,ih)'",
-		"-c:v", "libx264",
+func (m *Manager) runFFmpeg(ctx context.Context, job *models.Job, movie *models.Movie, srcPath, outPath string, encodeArgs []string) error {
+	args := []string{"-y", "-i", srcPath}
+	args = append(args, encodeArgs...)
+	args = append(args,
 		"-preset", m.preset,
 		"-crf", strconv.Itoa(m.crf),
-		"-c:a", "aac",
-		"-b:a", "192k",
 		"-movflags", "+faststart",
 		"-progress", "pipe:1",
 		"-nostats",
 		outPath,
-	}
+	)
 	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 
 	stdout, err := cmd.StdoutPipe()

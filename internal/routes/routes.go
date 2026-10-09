@@ -91,6 +91,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 		authorized.GET("/Videos/:itemId/stream", deps.VideosController.Stream)
 		authorized.HEAD("/Videos/:itemId/stream", deps.VideosController.Stream)
 		authorized.GET("/Videos/:itemId/preview", deps.VideosController.Preview)
+		authorized.GET("/Videos/:itemId/player", deps.VideosController.Player)
 
 		authorized.GET("/Audio/:itemId/stream", deps.AudioController.Stream)
 		authorized.HEAD("/Audio/:itemId/stream", deps.AudioController.Stream)

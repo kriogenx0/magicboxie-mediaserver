@@ -716,6 +716,15 @@ func TestFirstPartyClientsStillWork(t *testing.T) {
 		}
 	})
 
+	t.Run("the player downloads its 480p copy once it's ready", func(t *testing.T) {
+		if r := s.get("/Videos/"+idToyStory+"/player", bearer); r.Status != http.StatusOK || len(r.Body) != 512 {
+			t.Errorf("player copy = %d (%d bytes), want 200 with the 512-byte copy", r.Status, len(r.Body))
+		}
+		if r := s.get("/Videos/"+idHeat+"/player", bearer); r.Status != http.StatusConflict {
+			t.Errorf("player copy without one made = %d, want 409", r.Status)
+		}
+	})
+
 	t.Run("appletv's latest call returns a bare array of playable movies", func(t *testing.T) {
 		r := s.get("/Users/"+s.userID+"/Items/Latest?Limit=2", withHeader("Authorization", mediaBrowser(s.token)))
 		var latest []itemSummary

@@ -78,12 +78,13 @@ func main() {
 	musicImporter := music.NewImporter(gormDB, cfg.MusicDir, cfg.DataDir)
 
 	eventsHub := events.NewHub()
-	transcodeManager := transcode.NewManager(gormDB, cfg.MoviesDir, cfg.Transcode.Preset, cfg.Transcode.CRF, cfg.Transcode.MaxConcurrentJobs, eventsHub)
+	transcodeManager := transcode.NewManager(gormDB, cfg.MoviesDir, cfg.DataDir, cfg.Transcode.Preset, cfg.Transcode.CRF, cfg.Transcode.MaxConcurrentJobs, eventsHub)
 	importer.OnNeedsTranscode = transcodeManager.Enqueue
 	transcodeManager.Start(context.Background())
 
 	authController := controllers.NewAuthController(cfg, authManager)
 	itemsController := controllers.NewItemsController(gormDB, importer, musicImporter, cfg.MoviesDir, cfg.DataDir)
+	itemsController.OnSyncEnabled = transcodeManager.EnqueuePlayer
 	videosController := controllers.NewVideosController(gormDB, cfg.MoviesDir, cfg.DataDir)
 	audioController := controllers.NewAudioController(gormDB, cfg.MusicDir)
 

@@ -5,6 +5,10 @@ import "time"
 const (
 	JobTypeTranscode = "transcode"
 	JobTypeThumbnail = "thumbnail_images"
+	// JobTypePlayerTranscode makes the small 480p copy magicboxie-player
+	// downloads (see Movie.PlayerStatus), so the player's weak CPU doesn't
+	// have to re-encode the movie itself.
+	JobTypePlayerTranscode = "player_transcode"
 
 	JobStatusQueued    = "queued"
 	JobStatusRunning   = "running"
