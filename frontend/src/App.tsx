@@ -15,6 +15,7 @@ import { AlbumPage } from "./pages/AlbumPage";
 import { AdminMoviesPage } from "./pages/AdminMoviesPage";
 import { AdminActivityPage } from "./pages/AdminActivityPage";
 import { AdminDevicesPage } from "./pages/AdminDevicesPage";
+import { AdminInfoPage } from "./pages/AdminInfoPage";
 
 const queryClient = new QueryClient();
 
@@ -47,6 +48,10 @@ function AppRoutes() {
         <Route
           path="/admin/devices"
           element={<ProtectedRoute><Layout><AdminDevicesPage /></Layout></ProtectedRoute>}
+        />
+        <Route
+          path="/admin/info"
+          element={<ProtectedRoute><Layout><AdminInfoPage /></Layout></ProtectedRoute>}
         />
         <Route
           path="/"

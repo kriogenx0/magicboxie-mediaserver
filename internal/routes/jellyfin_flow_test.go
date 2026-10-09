@@ -681,6 +681,24 @@ func TestFirstPartyClientsStillWork(t *testing.T) {
 		}
 	})
 
+	t.Run("web UI info page", func(t *testing.T) {
+		r := s.get("/api/info", bearer)
+		var info struct {
+			System struct {
+				Hostname string
+				Disks    []struct{ Label string }
+			}
+			Library struct{ Movies, Tracks int }
+		}
+		r.decode(t, &info)
+		if r.Status != http.StatusOK || info.System.Hostname == "" || len(info.System.Disks) == 0 || info.Library.Movies != 4 || info.Library.Tracks != 2 {
+			t.Errorf("status=%d info=%+v", r.Status, info)
+		}
+		if r := s.get("/api/info", noAuth); r.Status != http.StatusUnauthorized {
+			t.Errorf("anonymous /api/info = %d, want 401", r.Status)
+		}
+	})
+
 	t.Run("web UI movie detail", func(t *testing.T) {
 		r := s.get("/Users/1/Items/"+idToyStory, bearer)
 		var item struct{ Name, MagicBoxieStatus string }

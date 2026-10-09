@@ -91,6 +91,11 @@ export function Layout({ children }: { children: ReactNode }) {
                 Devices
               </Link>
             )}
+            {onAdmin && (
+              <Link to="/admin/info" className={location.pathname === "/admin/info" ? "text-white" : "text-neutral-400 transition hover:text-neutral-200"}>
+                Info
+              </Link>
+            )}
           </nav>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">

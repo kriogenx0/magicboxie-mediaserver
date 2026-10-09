@@ -102,6 +102,7 @@ func main() {
 		VideosController:  videosController,
 		AudioController:   audioController,
 		UploadsController: uploadsController,
+		InfoController:    controllers.NewInfoController(gormDB, cfg.MoviesDir, cfg.MusicDir, cfg.DataDir),
 		EventsHub:         eventsHub,
 	})
 

@@ -16,6 +16,7 @@ type Dependencies struct {
 	VideosController  *controllers.VideosController
 	AudioController   *controllers.AudioController
 	UploadsController *controllers.UploadsController
+	InfoController    *controllers.InfoController
 	EventsHub         *events.Hub
 }
 
@@ -113,6 +114,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 			api.GET("/devices", deps.ItemsController.ListDevices)
 			api.GET("/items/search", deps.ItemsController.Search)
 			api.GET("/jobs", deps.ItemsController.Jobs)
+			api.GET("/info", deps.InfoController.Info)
 
 			api.POST("/uploads", deps.UploadsController.Create)
 			api.GET("/uploads/checksum/:sha256", deps.UploadsController.ChecksumStatus)

@@ -227,3 +227,29 @@ export interface JobFailedEvent {
   data: { movie_id: number; job_id: number; error: string };
 }
 export type ServerEvent = JobProgressEvent | JobCompletedEvent | JobFailedEvent;
+
+// GET /api/info -- the media server Pi's own health for the admin Info page.
+// Readings the Pi can't provide (e.g. in the Docker dev container) are null.
+export interface ServerInfo {
+  system: {
+    hostname: string;
+    mdns_name: string;
+    model: string | null;
+    os: string | null;
+    kernel: string | null;
+    arch: string;
+    cpu_count: number;
+    addresses: { interface: string; address: string }[];
+    uptime_seconds: number | null;
+    server_uptime_seconds: number;
+    load_average: number[] | null;
+    cpu_temperature_celsius: number | null;
+    under_voltage: boolean | null;
+    throttled: boolean | null;
+    memory_mb: { total: number; available: number } | null;
+    swap_mb: { total: number; available: number } | null;
+    disks: { label: string; path: string; total: number; free: number }[];
+    software: { commit?: string; date?: string; modified?: boolean; go_version: string };
+  };
+  library: { movies: number; tracks: number; devices: number; jobs_active: number };
+}

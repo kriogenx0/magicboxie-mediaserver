@@ -288,6 +288,7 @@ func newTestServer(t *testing.T) *testServer {
 		VideosController:  controllers.NewVideosController(gormDB, cfg.MoviesDir, cfg.DataDir),
 		AudioController:   controllers.NewAudioController(gormDB, cfg.MusicDir),
 		UploadsController: controllers.NewUploadsController(uploadManager, cfg.MoviesDir, cfg.MusicDir, importer, musicImporter),
+		InfoController:    controllers.NewInfoController(gormDB, cfg.MoviesDir, cfg.MusicDir, cfg.DataDir),
 		EventsHub:         hub,
 	})
 	// A stand-in SPA bundle, so unrouted paths behave as they do in
