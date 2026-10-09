@@ -1067,6 +1067,29 @@ func (ic *ItemsController) preparingForDevices() ([]preparingItem, error) {
 			preparing[i].ProgressPercent = &percent
 		}
 	}
+
+	// Ready movies whose 480p player copy is still being made: the player
+	// waits for that copy rather than downloading the full-size file.
+	var waitingForCopy []models.Movie
+	if err := ic.db.Where("sync_enabled = ? AND status = ? AND player_status = ?", true,
+		models.MovieStatusReady, models.PlayerStatusPending).
+		Order("added_at asc").Find(&waitingForCopy).Error; err != nil {
+		return nil, err
+	}
+	for _, m := range waitingForCopy {
+		item := preparingItem{Name: m.Title, Status: models.MovieStatusNeedsTranscode}
+		var job models.Job
+		err := ic.db.Where("movie_id = ? AND type = ? AND status = ?", m.ID, models.JobTypePlayerTranscode, models.JobStatusRunning).
+			Order("id desc").Limit(1).Find(&job).Error
+		if err != nil {
+			return nil, err
+		}
+		if job.ID != 0 {
+			percent := job.ProgressPercent
+			item.Status, item.ProgressPercent = models.MovieStatusTranscoding, &percent
+		}
+		preparing = append(preparing, item)
+	}
 	return preparing, nil
 }
 
