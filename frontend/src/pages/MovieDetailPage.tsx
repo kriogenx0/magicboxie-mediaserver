@@ -281,10 +281,10 @@ export function MovieDetailPage() {
             )}
 
             {ready && (
-              <div className="mt-7 flex gap-3">
+              <div className="mt-7 flex flex-wrap gap-3 whitespace-nowrap">
                 <button
                   onClick={() => setShowPlayer(true)}
-                  className="rounded-sm bg-white px-6 py-2.5 font-bold text-black transition hover:bg-white/80"
+                  className="rounded-sm bg-white px-5 py-2.5 font-bold text-black transition hover:bg-white/80 sm:px-6"
                 >
                   ▶ Play
                 </button>

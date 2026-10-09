@@ -59,13 +59,13 @@ export function Layout({ children }: { children: ReactNode }) {
         </div>
       )}
       <header
-        className={`${hasHero ? "absolute" : "sticky"} top-0 z-20 flex h-16 w-full items-center justify-between bg-gradient-to-b from-black via-black/85 to-transparent px-4 sm:h-[68px] sm:px-10`}
+        className={`${hasHero ? "absolute" : "sticky"} top-0 z-20 flex w-full flex-wrap items-center justify-between gap-x-3 gap-y-2 bg-gradient-to-b from-black via-black/85 to-transparent px-4 py-3 sm:h-[68px] sm:flex-nowrap sm:px-10 sm:py-0`}
       >
-        <div className="flex items-center gap-7">
-          <Link to="/" className="netflix-logo text-xl font-black uppercase text-[#e50914] sm:text-2xl" aria-label="MagicBoxie">
+        <div className="contents sm:flex sm:min-w-0 sm:items-center sm:gap-7">
+          <Link to="/" className="netflix-logo shrink-0 text-xl font-black uppercase text-[#e50914] sm:text-2xl" aria-label="MagicBoxie">
             MagicBoxie
           </Link>
-          <nav className="flex items-center gap-5 text-sm font-medium">
+          <nav className="scroll-row order-last flex w-full min-w-0 items-center gap-5 overflow-x-auto whitespace-nowrap text-sm font-medium sm:order-none sm:w-auto">
             <Link
               to="/"
               className={!onMusic && !onAdmin ? "text-white" : "text-neutral-400 transition hover:text-neutral-200"}
@@ -93,10 +93,10 @@ export function Layout({ children }: { children: ReactNode }) {
             )}
           </nav>
         </div>
-        <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <button
             onClick={() => setShowUpload((v) => !v)}
-            className="rounded-sm border border-neutral-500 px-2.5 py-1 text-xs font-medium text-neutral-100 transition hover:border-white hover:bg-white/10 sm:px-3 sm:text-sm"
+            className="whitespace-nowrap rounded-sm border border-neutral-500 px-2.5 py-1 text-xs font-medium text-neutral-100 transition hover:border-white hover:bg-white/10 sm:px-3 sm:text-sm"
           >
             {showUpload ? "Close" : "Add Media"}
           </button>

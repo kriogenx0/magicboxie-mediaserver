@@ -52,7 +52,7 @@ export function HomePage() {
   }
   if ((movies ?? []).length === 0) {
     return (
-      <div className="p-8 text-center text-neutral-400">
+      <div className="p-8 pt-32 text-center text-neutral-400">
         No movies yet. Use "Add Media" above to upload your first one.
       </div>
     );
@@ -61,7 +61,7 @@ export function HomePage() {
   return (
     <div>
       <Hero movies={heroMovies} selectedMovie={selectedMovie} />
-      <div className="relative z-10 -mt-14 sm:-mt-20">
+      <div className="relative z-10 -mt-6 sm:-mt-20">
         <PosterRow title="Continue Processing" movies={inProgress} onSelect={setSelectedMovie} />
         <PosterRow title="Recently Added" movies={recentlyAdded} onSelect={setSelectedMovie} />
         <PosterRow title="Kids" movies={kids} onSelect={setSelectedMovie} />

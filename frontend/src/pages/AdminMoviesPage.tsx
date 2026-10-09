@@ -21,7 +21,7 @@ function AdminMovieRow({ movie }: { movie: Movie }) {
   };
 
   return (
-    <li className="grid grid-cols-[64px_1fr_auto] items-center gap-4 border-b border-white/10 px-4 py-3 transition hover:bg-white/[.04] sm:grid-cols-[72px_1fr_110px_270px] sm:px-6">
+    <li className="grid grid-cols-[64px_minmax(0,1fr)] items-center gap-x-4 gap-y-3 border-b border-white/10 px-4 py-3 transition hover:bg-white/[.04] sm:grid-cols-[72px_1fr_110px_270px] sm:px-6">
       <Link to={`/movies/${movie.id}`} className="h-14 w-16 overflow-hidden rounded bg-neutral-800 sm:h-16 sm:w-[72px]">
         {movie.hasPoster && <img src={movieImageUrl(movie.id, "primary", movie.posterTag)} alt="" className="h-full w-full object-cover" />}
       </Link>
@@ -39,7 +39,7 @@ function AdminMovieRow({ movie }: { movie: Movie }) {
         )}
       </div>
       <span className="hidden text-sm capitalize text-neutral-400 sm:block">{movie.status.replace(/_/g, " ")}</span>
-      <div className="flex justify-end gap-2">
+      <div className="col-start-2 flex flex-wrap gap-2 sm:col-start-auto sm:justify-end">
         <button onClick={() => setShowTMDB(true)} className="rounded border border-[#e50914]/70 px-3 py-2 text-sm text-red-100 hover:border-[#e50914] hover:bg-[#e50914]/15">TMDB</button>
         <button onClick={() => { setTitle(movie.title); setEditing((v) => !v); }} className="rounded border border-white/20 px-3 py-2 text-sm hover:border-white">Rename</button>
         <button
