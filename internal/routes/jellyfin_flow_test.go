@@ -736,4 +736,23 @@ func TestFirstPartyClientsStillWork(t *testing.T) {
 			t.Errorf("nothing is marked for sync, so the device should be offered nothing: %v", page.names())
 		}
 	})
+
+	t.Run("device check-in lists synced movies the server is still preparing", func(t *testing.T) {
+		if r := s.post("/api/items/"+idInception+"/sync", map[string]bool{"enabled": true}); r.Status != http.StatusOK {
+			t.Fatalf("mark for sync = %d\nbody: %s", r.Status, r.Body)
+		}
+		r := s.post("/devices/register", map[string]string{"device_id": "pi-livingroom"}, noAuth)
+		var body struct {
+			Items               []itemSummary
+			MagicBoxiePreparing []struct{ Name, Status string }
+		}
+		r.decode(t, &body)
+		if len(body.Items) != 0 {
+			t.Errorf("Inception isn't ready, so it must not be offered for download: %+v", body.Items)
+		}
+		if len(body.MagicBoxiePreparing) != 1 || body.MagicBoxiePreparing[0].Name != "Inception" ||
+			body.MagicBoxiePreparing[0].Status != "transcoding" {
+			t.Errorf("preparing = %+v, want Inception transcoding", body.MagicBoxiePreparing)
+		}
+	})
 }

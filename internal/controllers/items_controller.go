@@ -1003,7 +1003,57 @@ func (ic *ItemsController) RegisterDevice(c *gin.Context) {
 	for i, m := range movies {
 		items[i] = movieToItem(m)
 	}
-	c.JSON(http.StatusOK, itemsResponse{Items: items, TotalRecordCount: len(items)})
+
+	preparing, err := ic.preparingForDevices()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to list movies being prepared"})
+		return
+	}
+	c.JSON(http.StatusOK, registerDeviceResponse{
+		itemsResponse:       itemsResponse{Items: items, TotalRecordCount: len(items)},
+		MagicBoxiePreparing: preparing,
+	})
+}
+
+// preparingItem is a movie marked for sync that isn't ready yet, so the
+// player's activity panel can show what the home server is still
+// transcoding for it and what is queued behind that.
+type preparingItem struct {
+	Name            string   `json:"Name"`
+	Status          string   `json:"Status"`
+	ProgressPercent *float64 `json:"ProgressPercent,omitempty"`
+}
+
+type registerDeviceResponse struct {
+	itemsResponse
+	MagicBoxiePreparing []preparingItem `json:"MagicBoxiePreparing"`
+}
+
+func (ic *ItemsController) preparingForDevices() ([]preparingItem, error) {
+	var movies []models.Movie
+	if err := ic.db.Where("sync_enabled = ? AND status NOT IN ?", true,
+		[]string{models.MovieStatusReady, models.MovieStatusError}).
+		Order("added_at asc").Find(&movies).Error; err != nil {
+		return nil, err
+	}
+	preparing := make([]preparingItem, len(movies))
+	for i, m := range movies {
+		preparing[i] = preparingItem{Name: m.Title, Status: m.Status}
+		if m.Status != models.MovieStatusTranscoding {
+			continue
+		}
+		var job models.Job
+		err := ic.db.Where("movie_id = ? AND type = ? AND status = ?", m.ID, models.JobTypeTranscode, models.JobStatusRunning).
+			Order("id desc").Limit(1).Find(&job).Error
+		if err != nil {
+			return nil, err
+		}
+		if job.ID != 0 {
+			percent := job.ProgressPercent
+			preparing[i].ProgressPercent = &percent
+		}
+	}
+	return preparing, nil
 }
 
 // ListDevices reports every Pi that has ever called RegisterDevice and when
