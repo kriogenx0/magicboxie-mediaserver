@@ -64,6 +64,7 @@ type Manager struct {
 	moviesDir     string
 	dataDir       string
 	preset        string
+	threads       int // 0 = ffmpeg's default (all cores)
 	crf           int
 	maxConcurrent int
 	hub           *events.Hub
@@ -86,6 +87,9 @@ func PlayerCopyPath(dataDir string, movieID uint) string {
 // SetGate makes the manager pause work whenever gate says to: new jobs wait
 // to start, and a running ffmpeg is suspended (SIGSTOP) until it clears.
 func (m *Manager) SetGate(g *Gate) { m.gate = g }
+
+// SetThreads caps the CPU cores each ffmpeg uses, to keep the Pi cooler.
+func (m *Manager) SetThreads(n int) { m.threads = n }
 
 // waitForClear blocks while the gate is closed. False means ctx ended.
 func (m *Manager) waitForClear(ctx context.Context) bool {
@@ -496,6 +500,9 @@ type eventData = map[string]interface{}
 func (m *Manager) runFFmpeg(ctx context.Context, job *models.Job, movie *models.Movie, srcPath, outPath string, encodeArgs []string) error {
 	args := []string{"-y", "-i", srcPath}
 	args = append(args, encodeArgs...)
+	if m.threads > 0 {
+		args = append(args, "-threads", strconv.Itoa(m.threads))
+	}
 	args = append(args,
 		"-preset", m.preset,
 		"-crf", strconv.Itoa(m.crf),

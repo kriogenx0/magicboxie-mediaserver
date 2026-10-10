@@ -82,6 +82,7 @@ func main() {
 	eventsHub := events.NewHub()
 	transcodeManager := transcode.NewManager(gormDB, cfg.MoviesDir, cfg.DataDir, cfg.Transcode.Preset, cfg.Transcode.CRF, cfg.Transcode.MaxConcurrentJobs, eventsHub)
 	playbackTracker := playback.NewTracker()
+	transcodeManager.SetThreads(cfg.Transcode.Threads)
 	transcodeManager.SetGate(transcode.NewGate(playbackTracker.Playing, sysinfo.CPUTemperature, cfg.Transcode.PauseAboveCelsius))
 	importer.OnNeedsTranscode = transcodeManager.Enqueue
 	importer.OnReady = transcodeManager.EnqueuePlayer

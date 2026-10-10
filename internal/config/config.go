@@ -25,6 +25,9 @@ type Config struct {
 		MaxConcurrentJobs int    `yaml:"max_concurrent_jobs"`
 		Preset            string `yaml:"preset"`
 		CRF               int    `yaml:"crf"`
+		// Threads caps how many CPU cores ffmpeg uses. Fewer cores means a
+		// slower transcode but a cooler Pi. 0 lets ffmpeg use them all.
+		Threads int `yaml:"threads"`
 		// PauseAboveCelsius suspends transcoding while the CPU is at or above
 		// this temperature (resuming 5 degrees below it). 0 disables.
 		PauseAboveCelsius float64 `yaml:"pause_above_celsius"`
@@ -40,7 +43,8 @@ func defaults() Config {
 	c.Transcode.MaxConcurrentJobs = 1
 	c.Transcode.Preset = "medium"
 	c.Transcode.CRF = 20
-	c.Transcode.PauseAboveCelsius = 75
+	c.Transcode.Threads = 2
+	c.Transcode.PauseAboveCelsius = 65
 	return c
 }
 
