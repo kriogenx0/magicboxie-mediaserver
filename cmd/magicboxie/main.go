@@ -80,6 +80,7 @@ func main() {
 	eventsHub := events.NewHub()
 	transcodeManager := transcode.NewManager(gormDB, cfg.MoviesDir, cfg.DataDir, cfg.Transcode.Preset, cfg.Transcode.CRF, cfg.Transcode.MaxConcurrentJobs, eventsHub)
 	importer.OnNeedsTranscode = transcodeManager.Enqueue
+	importer.OnReady = transcodeManager.EnqueuePlayer
 	transcodeManager.Start(context.Background())
 
 	authController := controllers.NewAuthController(cfg, authManager)

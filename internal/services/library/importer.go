@@ -32,6 +32,11 @@ type Importer struct {
 	// pick it up. Wired from main.go to avoid this package depending on the
 	// transcode package directly.
 	OnNeedsTranscode func(movieID uint)
+
+	// OnReady is invoked (if set) when an imported movie is playable as-is,
+	// so its 480p player copy can be made. Movies that need a transcode get
+	// theirs once that finishes instead.
+	OnReady func(movieID uint)
 }
 
 func NewImporter(db *gorm.DB, moviesDir, dataDir string, tmdbClient *tmdb.Client) *Importer {
@@ -163,6 +168,9 @@ func (im *Importer) probeAndFinalize(ctx context.Context, movie *models.Movie, a
 
 	if movie.Status == models.MovieStatusNeedsTranscode && im.OnNeedsTranscode != nil {
 		im.OnNeedsTranscode(movie.ID)
+	}
+	if movie.Status == models.MovieStatusReady && im.OnReady != nil {
+		im.OnReady(movie.ID)
 	}
 	return nil
 }

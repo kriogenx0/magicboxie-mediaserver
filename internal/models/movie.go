@@ -14,7 +14,7 @@ const (
 
 // Player copy statuses (Movie.PlayerStatus): the 480p rendition made for
 // magicboxie-player, stored under <data_dir>/player/<id>.mp4. Empty means
-// none has been asked for yet (only device-synced movies get one).
+// none has been made yet; every ready movie gets one.
 const (
 	PlayerStatusPending = "pending"
 	PlayerStatusReady   = "ready"

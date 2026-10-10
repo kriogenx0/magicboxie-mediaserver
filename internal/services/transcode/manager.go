@@ -116,11 +116,11 @@ func (m *Manager) Start(ctx context.Context) {
 		m.queue <- queuedJob{movieID: job.MovieID, jobType: job.Type}
 	}
 
-	// Device-synced movies still missing their player copy (synced before
-	// this existed, or its job was lost) get one now.
+	// Ready movies still missing their player copy (added before this
+	// existed, or its job was lost) get one now.
 	var needPlayerCopy []models.Movie
-	m.db.Where("status = ? AND sync_enabled = ? AND player_status IN ?",
-		models.MovieStatusReady, true, []string{"", models.PlayerStatusPending}).Find(&needPlayerCopy)
+	m.db.Where("status = ? AND player_status IN ?",
+		models.MovieStatusReady, []string{"", models.PlayerStatusPending}).Find(&needPlayerCopy)
 	for _, movie := range needPlayerCopy {
 		m.EnqueuePlayer(movie.ID)
 	}
@@ -137,14 +137,14 @@ func (m *Manager) Enqueue(movieID uint) {
 }
 
 // EnqueuePlayer queues the 480p copy magicboxie-player downloads, for a
-// ready, device-synced movie that doesn't have one yet. A no-op otherwise,
+// ready movie that doesn't have one yet. A no-op otherwise,
 // so it's safe to call whenever a movie might have become eligible.
 func (m *Manager) EnqueuePlayer(movieID uint) {
 	var movie models.Movie
 	if err := m.db.First(&movie, movieID).Error; err != nil {
 		return
 	}
-	if movie.Status != models.MovieStatusReady || !movie.SyncEnabled || movie.PlayerStatus == models.PlayerStatusReady {
+	if movie.Status != models.MovieStatusReady || movie.PlayerStatus == models.PlayerStatusReady {
 		return
 	}
 	var active int64
@@ -294,6 +294,11 @@ func (m *Manager) processPlayer(ctx context.Context, movieID uint) {
 			"finished_at": finishedAt,
 		})
 		m.db.Model(&movie).Update("player_status", models.PlayerStatusError)
+		m.hub.Broadcast(events.Event{Type: "job_failed", Data: eventData{
+			"movie_id": movie.ID,
+			"job_id":   job.ID,
+			"error":    err.Error(),
+		}})
 		return
 	}
 
@@ -304,6 +309,11 @@ func (m *Manager) processPlayer(ctx context.Context, movieID uint) {
 		"progress_percent": 100,
 		"finished_at":      finishedAt,
 	})
+	m.hub.Broadcast(events.Event{Type: "job_completed", Data: eventData{
+		"movie_id": movie.ID,
+		"job_id":   job.ID,
+		"status":   models.MovieStatusReady,
+	}})
 }
 
 // finalize deletes the (now-superseded) original source file -- per the
@@ -428,6 +438,7 @@ func (m *Manager) watchProgress(job *models.Job, movie *models.Movie, stdout io.
 					m.hub.Broadcast(events.Event{Type: "job_progress", Data: eventData{
 						"movie_id":         movie.ID,
 						"job_id":           job.ID,
+						"job_type":         job.Type,
 						"progress_percent": percent,
 					}})
 				}
