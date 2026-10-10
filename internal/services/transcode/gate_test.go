@@ -1,6 +1,9 @@
 package transcode
 
-import "testing"
+import (
+	"testing"
+	"time"
+)
 
 func TestGatePausesForPlayback(t *testing.T) {
 	playing := true
@@ -40,5 +43,42 @@ func TestGateUnreadableTemperatureAndDisabled(t *testing.T) {
 	var nilGate *Gate
 	if nilGate.Reason() != "" {
 		t.Fatal("nil gate must never pause")
+	}
+}
+
+func TestGateResumesAfterStayingUnderTheLimit(t *testing.T) {
+	temp := 76.0
+	clock := time.Unix(0, 0)
+	g := NewGate(func() bool { return false }, func() *float64 { return &temp }, 75)
+	g.now = func() time.Time { return clock }
+	if g.Reason() == "" {
+		t.Fatal("not paused at 76°C")
+	}
+	temp = 73 // under the limit, but not 5 degrees under
+	if g.Reason() == "" {
+		t.Fatal("resumed as soon as it dipped under the limit")
+	}
+	clock = clock.Add(resumeAfterCool - time.Second)
+	if g.Reason() == "" {
+		t.Fatal("resumed before staying cool long enough")
+	}
+	clock = clock.Add(time.Second)
+	if r := g.Reason(); r != "" {
+		t.Fatalf("still paused after %v under the limit: %q", resumeAfterCool, r)
+	}
+	temp = 75
+	if g.Reason() == "" {
+		t.Fatal("not paused again at the limit")
+	}
+	temp = 74
+	clock = clock.Add(time.Minute)
+	g.Reason()
+	temp = 76 // a spike restarts the cool-down
+	g.Reason()
+	temp = 74
+	g.Reason()
+	clock = clock.Add(resumeAfterCool - time.Second)
+	if g.Reason() == "" {
+		t.Fatal("a spike over the limit didn't restart the cool-down")
 	}
 }
