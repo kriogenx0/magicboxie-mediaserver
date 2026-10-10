@@ -1,6 +1,6 @@
 #!/bin/bash
 # Run on a 64-bit Pi. Builds before stopping the old service; preserves its
-# original config/database for rollback. nginx continues to own port 80.
+# original config/database for rollback. Installs the nginx proxy on port 80.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ "$(uname -m)" = aarch64 ] || { echo 'Requires 64-bit Raspberry Pi OS.' >&2; exit 1; }
@@ -53,4 +53,14 @@ if [ "$healthy" != true ]; then
 fi
 if [ -n "$legacy" ]; then sudo systemctl disable "$legacy"; fi
 trap - ERR
-echo 'MagicBoxie is running in Docker on port 8080 behind the existing nginx proxy.'
+
+# nginx owns port 80 and proxies everything to the container. Debian's stock
+# "default" site would otherwise answer requests with "Welcome to nginx".
+command -v nginx >/dev/null || sudo apt-get install -y nginx
+sudo install -m 0644 deploy/pi/nginx/magicboxie.conf /etc/nginx/sites-available/magicboxie
+sudo ln -sfn /etc/nginx/sites-available/magicboxie /etc/nginx/sites-enabled/magicboxie
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo nginx -t
+sudo systemctl enable --now nginx
+sudo systemctl reload nginx
+echo 'MagicBoxie is running in Docker on port 8080, behind nginx on port 80.'
