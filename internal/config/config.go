@@ -29,8 +29,7 @@ type Config struct {
 		// slower transcode but a cooler Pi. 0 lets ffmpeg use them all.
 		Threads int `yaml:"threads"`
 		// PauseAboveCelsius suspends transcoding while the CPU is at or above
-		// this temperature. It resumes 5 degrees below it, or after 2 minutes
-		// anywhere under it. 0 disables.
+		// this temperature (resuming 5 degrees below it). 0 disables.
 		PauseAboveCelsius float64 `yaml:"pause_above_celsius"`
 	} `yaml:"transcode"`
 }

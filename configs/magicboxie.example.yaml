@@ -18,6 +18,5 @@ transcode:
   # CPU cores ffmpeg may use. Fewer runs slower but keeps the Pi cooler; 0 = all.
   threads: 2
   # Transcoding also pauses while anything is playing back, and while the CPU
-  # is at or above this temperature. It resumes once 5 degrees cooler, or after
-  # 2 minutes anywhere under it. 0 disables.
+  # is at or above this temperature (resumes 5 degrees cooler). 0 disables.
   pause_above_celsius: 65
