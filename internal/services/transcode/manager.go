@@ -35,12 +35,21 @@ const gateCheckInterval = 3 * time.Second
 // backlog on its own instead of only at startup.
 const playerSweepInterval = 10 * time.Minute
 
+// PlayerCopyVersion identifies the current PlayerFFmpegArgs. Bump it when
+// the encoding changes: ready copies made with an older version are re-made
+// by the sweep, and the player re-downloads them (MagicBoxiePlayerVersion).
+const PlayerCopyVersion = 2
+
 // PlayerFFmpegArgs is the video/audio encoding for magicboxie-player's copy:
-// 480p at most (never upscaled), H.264 Baseline - no CABAC or B-frames, the
-// most CPU-expensive parts of decode - which the player's Pi Zero can play
-// smoothly. Matches what the player would otherwise encode for itself.
+// progressive (interlaced sources are deinterlaced), fitted inside the
+// player's 720x480 output (never upscaled), H.264 Baseline - no CABAC or
+// B-frames, the most CPU-expensive parts of decode - which the player's Pi
+// Zero can play smoothly. Version 1 kept the height at 480 whatever the
+// width, so a 2.39:1 movie came out 1152x480: over twice the pixels the
+// screen shows, which the Pi then had to decode and scale down, and played
+// choppy.
 var PlayerFFmpegArgs = []string{
-	"-vf", "scale=-2:'min(480,ih)'",
+	"-vf", "bwdif=deint=interlaced,scale=w='min(720,iw)':h='min(480,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
 	"-c:v", "libx264",
 	"-profile:v", "baseline",
 	"-level", "3.1",
@@ -199,12 +208,14 @@ func (m *Manager) Start(ctx context.Context) {
 }
 
 // sweepPlayerCopies queues a 480p copy for every ready movie still missing
-// one (added before this existed, or its job was lost). EnqueuePlayer skips
-// movies that already have an active job, so this is safe to repeat.
+// one (added before this existed, or its job was lost) or whose copy was made
+// by an older PlayerCopyVersion. EnqueuePlayer skips movies that already have
+// an active job, so this is safe to repeat.
 func (m *Manager) sweepPlayerCopies() {
 	var needPlayerCopy []models.Movie
-	m.db.Where("status = ? AND player_status IN ?",
-		models.MovieStatusReady, []string{"", models.PlayerStatusPending}).Find(&needPlayerCopy)
+	m.db.Where("status = ? AND (player_status IN ? OR (player_status = ? AND player_version < ?))",
+		models.MovieStatusReady, []string{"", models.PlayerStatusPending},
+		models.PlayerStatusReady, PlayerCopyVersion).Find(&needPlayerCopy)
 	for _, movie := range needPlayerCopy {
 		m.EnqueuePlayer(movie.ID)
 	}
@@ -221,14 +232,15 @@ func (m *Manager) Enqueue(movieID uint) {
 }
 
 // EnqueuePlayer queues the 480p copy magicboxie-player downloads, for a
-// ready movie that doesn't have one yet. A no-op otherwise,
+// ready movie that doesn't have a current one yet. A no-op otherwise,
 // so it's safe to call whenever a movie might have become eligible.
 func (m *Manager) EnqueuePlayer(movieID uint) {
 	var movie models.Movie
 	if err := m.db.First(&movie, movieID).Error; err != nil {
 		return
 	}
-	if movie.Status != models.MovieStatusReady || movie.PlayerStatus == models.PlayerStatusReady {
+	if movie.Status != models.MovieStatusReady ||
+		(movie.PlayerStatus == models.PlayerStatusReady && movie.PlayerVersion >= PlayerCopyVersion) {
 		return
 	}
 	var active int64
@@ -359,7 +371,7 @@ func (m *Manager) process(ctx context.Context, movieID uint) {
 // processPlayer encodes a movie's 480p copy for magicboxie-player next to
 // (never replacing) its full-quality file. A failure only marks the player
 // copy as failed - the movie itself stays ready, and the player falls back
-// to downloading the full file and encoding it itself.
+// to downloading and playing the full file.
 func (m *Manager) processPlayer(ctx context.Context, movieID uint) {
 	var movie models.Movie
 	if err := m.db.First(&movie, movieID).Error; err != nil {
@@ -404,7 +416,10 @@ func (m *Manager) processPlayer(ctx context.Context, movieID uint) {
 		return
 	}
 
-	m.db.Model(&movie).Update("player_status", models.PlayerStatusReady)
+	m.db.Model(&movie).Updates(map[string]interface{}{
+		"player_status":  models.PlayerStatusReady,
+		"player_version": PlayerCopyVersion,
+	})
 	finishedAt := time.Now()
 	m.db.Model(&job).Updates(map[string]interface{}{
 		"status":           models.JobStatusCompleted,

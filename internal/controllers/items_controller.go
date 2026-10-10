@@ -105,6 +105,9 @@ type jellyfinItem struct {
 	// The 480p copy magicboxie-player downloads from /Videos/{id}/player:
 	// "" (not asked for), "pending", "ready" or "error".
 	MagicBoxiePlayerStatus string `json:"MagicBoxiePlayerStatus,omitempty"`
+	// Which encoding the ready copy was made with; the player re-downloads
+	// a movie when this is newer than the copy it has.
+	MagicBoxiePlayerVersion int `json:"MagicBoxiePlayerVersion,omitempty"`
 }
 
 type itemsResponse struct {
@@ -187,6 +190,9 @@ func movieToItem(m models.Movie) jellyfinItem {
 		MagicBoxiePosterIsGenerated: m.PosterIsGenerated,
 		MagicBoxieSyncEnabled:       m.SyncEnabled,
 		MagicBoxiePlayerStatus:      m.PlayerStatus,
+	}
+	if m.PlayerStatus == models.PlayerStatusReady {
+		item.MagicBoxiePlayerVersion = m.PlayerVersion
 	}
 
 	if m.GenresJSON != "" {
