@@ -13,12 +13,13 @@ import (
 // InfoController serves the admin Info page: the media server Pi's own
 // health plus a few library totals.
 type InfoController struct {
-	db   *gorm.DB
-	dirs []sysinfo.Dir
+	db      *gorm.DB
+	dirs    []sysinfo.Dir
+	dataDir string
 }
 
 func NewInfoController(db *gorm.DB, moviesDir, musicDir, dataDir string) *InfoController {
-	return &InfoController{db: db, dirs: []sysinfo.Dir{
+	return &InfoController{db: db, dataDir: dataDir, dirs: []sysinfo.Dir{
 		{Label: "Movie storage", Path: moviesDir},
 		{Label: "Music storage", Path: musicDir},
 		{Label: "App data", Path: dataDir},

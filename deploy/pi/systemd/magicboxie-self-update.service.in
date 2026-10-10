@@ -1,0 +1,15 @@
+# Installed by scripts/pi-setup.sh. Runs scripts/pi-self-update.sh, which
+# installs main if it has anything new. Started by the .timer and .path units
+# next to this one; logs with: journalctl -u magicboxie-self-update
+[Unit]
+Description=MagicBoxie media server self-update
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=@REPO_DIR@/scripts/pi-self-update.sh
+# The image build is slow on a Pi; keep it behind streaming and transcoding.
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=2h

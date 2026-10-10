@@ -118,6 +118,8 @@ func Register(router *gin.Engine, deps Dependencies) {
 			api.GET("/items/search", deps.ItemsController.Search)
 			api.GET("/jobs", deps.ItemsController.Jobs)
 			api.GET("/info", deps.InfoController.Info)
+			api.GET("/update", deps.InfoController.UpdateStatus)
+			api.POST("/update", deps.InfoController.RequestUpdate)
 
 			api.POST("/uploads", deps.UploadsController.Create)
 			api.GET("/uploads/checksum/:sha256", deps.UploadsController.ChecksumStatus)

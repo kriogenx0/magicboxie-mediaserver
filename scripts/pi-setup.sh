@@ -1,6 +1,8 @@
 #!/bin/bash
 # Run on a 64-bit Pi. Builds before stopping the old service; preserves its
-# original config/database for rollback. Installs the nginx proxy on port 80.
+# original config/database for rollback. Installs the nginx proxy on port 80
+# and the self-update units. MAGICBOXIE_REVISION, when set, records the commit
+# being installed.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 [ "$(uname -m)" = aarch64 ] || { echo 'Requires 64-bit Raspberry Pi OS.' >&2; exit 1; }
@@ -53,6 +55,17 @@ if [ "$healthy" != true ]; then
 fi
 if [ -n "$legacy" ]; then sudo systemctl disable "$legacy"; fi
 trap - ERR
+# What is running now, so self-update only rebuilds when main moves on.
+if [ -n "${MAGICBOXIE_REVISION:-}" ]; then
+  echo "$MAGICBOXIE_REVISION" | sudo tee /var/lib/magicboxie-docker/installed-revision >/dev/null
+fi
+
+# Self-update from main (scripts/pi-self-update.sh): daily, after boot, and on "Update now".
+sudo sed -e "s|@REPO_DIR@|$PWD|g" deploy/pi/systemd/magicboxie-self-update.service.in |
+  sudo tee /etc/systemd/system/magicboxie-self-update.service >/dev/null
+sudo install -m 0644 deploy/pi/systemd/magicboxie-self-update.timer deploy/pi/systemd/magicboxie-self-update.path /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now magicboxie-self-update.timer magicboxie-self-update.path
 
 # nginx owns port 80 and proxies everything to the container. Debian's stock
 # "default" site would otherwise answer requests with "Welcome to nginx".

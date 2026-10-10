@@ -1,7 +1,7 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { apiFetch } from "../api/client";
-import type { ServerInfo } from "../api/types";
+import type { ServerInfo, UpdateStatus } from "../api/types";
 import { PageLoader } from "../components/PageLoader";
 
 type Tone = "good" | "warn" | "bad";
@@ -32,10 +32,13 @@ function Meter({ used, total }: { used: number; total: number }) {
   );
 }
 
-function Section({ title, rows }: { title: string; rows: Row[] }) {
+function Section({ title, rows, action, className = "" }: { title: string; rows: Row[]; action?: ReactNode; className?: string }) {
   return (
-    <div className="rounded bg-neutral-900 p-4 ring-1 ring-white/10">
-      <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-neutral-400">{title}</h2>
+    <div className={`rounded bg-neutral-900 p-4 ring-1 ring-white/10 ${className}`}>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-sm font-semibold uppercase tracking-wider text-neutral-400">{title}</h2>
+        {action}
+      </div>
       <dl className="space-y-2 text-sm">
         {rows.map(([label, value, tone]) => (
           <div key={label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
@@ -52,6 +55,68 @@ function tempTone(celsius: number): Tone {
   if (celsius >= 80) return "bad";
   if (celsius >= 70) return "warn";
   return "good";
+}
+
+const updateTone: Partial<Record<UpdateStatus["state"], Tone>> = {
+  current: "good",
+  checking: "warn",
+  installing: "warn",
+  offline: "warn",
+  failed: "bad",
+};
+
+function shortCommit(rev?: string) {
+  return rev ? rev.replace(/^([0-9a-f]{7})[0-9a-f]*/, "$1") : null;
+}
+
+// The server updates itself from main every night; this shows how that went
+// and lets an admin check now. Installing rebuilds and restarts the server.
+function UpdatesSection() {
+  const queryClient = useQueryClient();
+  const { data: update } = useQuery({
+    queryKey: ["server-update"],
+    queryFn: () => apiFetch<UpdateStatus>("/api/update"),
+    refetchInterval: 5000,
+  });
+  const updateNow = useMutation({
+    mutationFn: () => apiFetch("/api/update", { method: "POST" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["server-update"] }),
+  });
+  const busy = update?.requested || update?.state === "checking" || update?.state === "installing";
+
+  function confirmUpdate() {
+    if (!confirm("Check for an update and install it now? If there is one, the server rebuilds and restarts, which can take a while on the Pi. Anything playing from it stops briefly.")) return;
+    updateNow.mutate();
+  }
+
+  const state: Row = update?.requested
+    ? ["Status", "Update requested, waiting for the server to start it", "warn"]
+    : update?.state
+      ? ["Status", update.message || update.state, updateTone[update.state]]
+      : ["Status", "Not set up on this server yet (run make deploy once)"];
+
+  return (
+    <Section
+      title="Updates"
+      className="md:col-span-2"
+      action={
+        <button
+          onClick={confirmUpdate}
+          disabled={busy || updateNow.isPending}
+          className="rounded border border-neutral-600 px-3 py-1.5 text-xs text-neutral-200 hover:border-white disabled:opacity-50"
+        >
+          Update now
+        </button>
+      }
+      rows={[
+        updateNow.error ? ["Status", "Could not request an update", "bad"] : state,
+        ["Installed", shortCommit(update?.installed)],
+        ["Latest on main", shortCommit(update?.latest)],
+        ["Last checked", update?.checked_at ? new Date(update.checked_at).toLocaleString() : null],
+        ["Schedule", "Every night around 4 AM and after a restart"],
+      ]}
+    />
+  );
 }
 
 export function AdminInfoPage() {
@@ -163,6 +228,7 @@ export function AdminInfoPage() {
                 ["Go", sys.software.go_version],
               ]}
             />
+            <UpdatesSection />
           </div>
         </>
       )}

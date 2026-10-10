@@ -25,5 +25,11 @@ rsync -az --delete \
   --exclude configs/magicboxie.local.yaml \
   "$REPO_DIR/" "$SSH_TARGET:$REMOTE_DIR/"
 
+# Records what was deployed so the Pi's self-update knows whether main is
+# newer. A checkout with local changes records no match, so the next
+# self-update puts the Pi back on main.
+revision=$(git -C "$REPO_DIR" rev-parse HEAD 2>/dev/null || echo unknown)
+[ -z "$(git -C "$REPO_DIR" status --porcelain 2>/dev/null)" ] || revision="$revision-modified"
+
 echo "==> Building and installing on $SSH_TARGET"
-ssh -tt "$SSH_TARGET" "cd '$REMOTE_DIR' && ./scripts/pi-setup.sh"
+ssh -tt "$SSH_TARGET" "cd '$REMOTE_DIR' && MAGICBOXIE_REVISION='$revision' ./scripts/pi-setup.sh"

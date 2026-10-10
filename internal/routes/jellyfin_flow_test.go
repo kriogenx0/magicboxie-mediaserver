@@ -699,6 +699,29 @@ func TestFirstPartyClientsStillWork(t *testing.T) {
 		}
 	})
 
+	t.Run("web UI update now", func(t *testing.T) {
+		var status struct {
+			State     string
+			Requested bool
+		}
+		r := s.get("/api/update", bearer)
+		r.decode(t, &status)
+		if r.Status != http.StatusOK || status.State != "" || status.Requested {
+			t.Errorf("before any update: status=%d %+v", r.Status, status)
+		}
+		if r := s.post("/api/update", nil, noAuth); r.Status != http.StatusUnauthorized {
+			t.Errorf("anonymous POST /api/update = %d, want 401", r.Status)
+		}
+		if r := s.post("/api/update", nil); r.Status != http.StatusAccepted {
+			t.Errorf("POST /api/update = %d, want 202", r.Status)
+		}
+		r = s.get("/api/update", bearer)
+		r.decode(t, &status)
+		if !status.Requested {
+			t.Errorf("after Update now: %+v, want requested", status)
+		}
+	})
+
 	t.Run("web UI movie detail", func(t *testing.T) {
 		r := s.get("/Users/1/Items/"+idToyStory, bearer)
 		var item struct{ Name, MagicBoxieStatus string }

@@ -1,0 +1,12 @@
+# Installed by scripts/pi-setup.sh. The admin's "Update now" writes this file
+# from inside the container (its data dir is /var/lib/magicboxie-docker);
+# the update script deletes it when it starts.
+[Unit]
+Description=Watch for MagicBoxie "Update now" requests
+
+[Path]
+PathExists=/var/lib/magicboxie-docker/update-request
+Unit=magicboxie-self-update.service
+
+[Install]
+WantedBy=multi-user.target

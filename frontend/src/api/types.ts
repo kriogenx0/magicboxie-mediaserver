@@ -257,3 +257,14 @@ export interface ServerInfo {
   };
   library: { movies: number; tracks: number; devices: number; jobs_active: number };
 }
+
+// GET /api/update -- what the Pi host's self-update last reported. state is
+// empty when no updater has run (dev, or a Pi not yet set up for it).
+export interface UpdateStatus {
+  state: "" | "checking" | "installing" | "current" | "offline" | "failed";
+  installed?: string;
+  latest?: string;
+  checked_at?: string;
+  message?: string;
+  requested: boolean;
+}
