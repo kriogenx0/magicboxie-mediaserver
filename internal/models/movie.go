@@ -46,6 +46,7 @@ type Movie struct {
 	NeedsReview       bool      `json:"needs_review"`
 	SyncEnabled       bool      `json:"sync_enabled"`
 	PlayerStatus      string    `json:"player_status"`
+	PlayerVersion     int       `gorm:"not null;default:0" json:"player_version"` // transcode.PlayerCopyVersion the ready copy was made with
 	ErrorMessage      string    `json:"error_message,omitempty"`
 	AddedAt           time.Time `gorm:"not null;autoCreateTime" json:"added_at"`
 	UpdatedAt         time.Time `gorm:"not null;autoUpdateTime" json:"updated_at"`
