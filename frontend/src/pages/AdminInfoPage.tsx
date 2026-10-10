@@ -38,7 +38,7 @@ function Section({ title, rows }: { title: string; rows: Row[] }) {
       <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider text-neutral-400">{title}</h2>
       <dl className="space-y-2 text-sm">
         {rows.map(([label, value, tone]) => (
-          <div key={label} className="grid grid-cols-[9rem_1fr] gap-3">
+          <div key={label} className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-3 sm:grid-cols-[9rem_minmax(0,1fr)]">
             <dt className="text-neutral-500">{label}</dt>
             <dd className={`min-w-0 break-words ${tone ? toneStyle[tone] : "text-neutral-100"}`}>{value ?? "Unknown"}</dd>
           </div>
@@ -91,28 +91,28 @@ export function AdminInfoPage() {
 
       {sys && lib && (
         <>
-          <div className="mb-6 grid gap-3 sm:grid-cols-4">
+          <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <div className="rounded bg-neutral-900 p-4 ring-1 ring-white/10">
-              <div className={`text-2xl font-bold ${temp != null ? toneStyle[tempTone(temp)] : ""}`}>{temp != null ? `${temp.toFixed(1)}°C` : "—"}</div>
+              <div className={`break-words text-xl font-bold sm:text-2xl ${temp != null ? toneStyle[tempTone(temp)] : ""}`}>{temp != null ? `${temp.toFixed(1)}°C` : "—"}</div>
               <div className="text-sm text-neutral-400">CPU temperature</div>
             </div>
             <div className="rounded bg-neutral-900 p-4 ring-1 ring-white/10">
-              <div className="text-2xl font-bold">{mem ? `${((mem.total - mem.available) / 1024).toFixed(1)} / ${(mem.total / 1024).toFixed(1)} GB` : "—"}</div>
+              <div className="break-words text-xl font-bold sm:text-2xl">{mem ? `${((mem.total - mem.available) / 1024).toFixed(1)} / ${(mem.total / 1024).toFixed(1)} GB` : "—"}</div>
               <div className="text-sm text-neutral-400">Memory used</div>
               {mem && <Meter used={mem.total - mem.available} total={mem.total} />}
             </div>
             <div className="rounded bg-neutral-900 p-4 ring-1 ring-white/10">
-              <div className="text-2xl font-bold">{sys.disks[0] ? `${sys.disks[0].free} GB` : "—"}</div>
+              <div className="break-words text-xl font-bold sm:text-2xl">{sys.disks[0] ? `${sys.disks[0].free} GB` : "—"}</div>
               <div className="text-sm text-neutral-400">{sys.disks[0] ? `Free · ${sys.disks[0].label.toLowerCase()}` : "Free space"}</div>
               {sys.disks[0] && <Meter used={sys.disks[0].total - sys.disks[0].free} total={sys.disks[0].total} />}
             </div>
             <div className="rounded bg-neutral-900 p-4 ring-1 ring-white/10">
-              <div className="text-2xl font-bold">{sys.uptime_seconds != null ? duration(sys.uptime_seconds) : "—"}</div>
+              <div className="break-words text-xl font-bold sm:text-2xl">{sys.uptime_seconds != null ? duration(sys.uptime_seconds) : "—"}</div>
               <div className="text-sm text-neutral-400">Uptime</div>
             </div>
           </div>
 
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Section
               title="Device"
               rows={[
