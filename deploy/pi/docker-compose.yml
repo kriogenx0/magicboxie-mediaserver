@@ -1,0 +1,15 @@
+name: magicboxie-pi
+services:
+  magicboxie:
+    build:
+      context: ../..
+    image: magicboxie-pi:local
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /etc/magicboxie/docker.yaml:/etc/magicboxie/config.yaml:ro
+      - /var/lib/magicboxie-docker:/var/lib/magicboxie
+      # Preserve absolute artwork paths stored by the old magicbox server.
+      - /var/lib/magicboxie-docker:/var/lib/magicbox
+      - /content:/content
+    restart: unless-stopped

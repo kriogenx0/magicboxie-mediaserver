@@ -13,3 +13,6 @@ frontend/node_modules
 frontend/dist
 # Rebuilt inside the image by the frontend stage.
 internal/web/dist
+
+# Legacy Pi configuration also contains credentials.
+configs/magicbox.yaml

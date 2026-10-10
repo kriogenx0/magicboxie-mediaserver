@@ -281,7 +281,7 @@ func parseThrottled(out string) (*bool, *bool) {
 }
 
 // software reports the commit Go stamped into the binary. Builds from an
-// rsynced checkout without .git (deploy/pi/publish.sh) carry none.
+// rsynced checkout without .git (scripts/pi-publish.sh) carry none.
 func software() Software {
 	sw := Software{GoVersion: runtime.Version()}
 	info, ok := debug.ReadBuildInfo()
