@@ -29,6 +29,7 @@ export function MovieDetailPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const navigate = useNavigate();
   const progress = useTranscodeProgress(movieId);
+  const playerProgress = useTranscodeProgress(movieId, "playerProgress");
   const selectThumbnail = useSelectThumbnail(movieId);
   const setDeviceSync = useSetDeviceSync(movieId);
   const renameMovie = useRenameMovie(movieId);
@@ -215,6 +216,14 @@ export function MovieDetailPage() {
                     : movie.status === "error"
                       ? "This file failed to process."
                       : "Matching metadata…"}
+              </div>
+            )}
+
+            {ready && movie.playerStatus === "pending" && (
+              <div className="mt-5 rounded-sm bg-neutral-900/90 px-4 py-3 text-sm text-neutral-300">
+                {playerProgress === undefined
+                  ? "Queued for the 480p player copy"
+                  : `Making the 480p player copy… ${playerProgress.toFixed(0)}%`}
               </div>
             )}
 

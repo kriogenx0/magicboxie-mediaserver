@@ -54,6 +54,7 @@ export interface JellyfinItem {
   MagicBoxieNeedsReview: boolean;
   MagicBoxiePosterIsGenerated: boolean;
   MagicBoxieSyncEnabled: boolean;
+  MagicBoxiePlayerStatus?: "" | "pending" | "ready" | "error";
 }
 
 export interface ItemsResponse {
@@ -83,6 +84,8 @@ export interface Movie {
   originalFilename: string;
   addedAt: string;
   syncEnabled: boolean;
+  /** State of the 480p copy made for the player device. */
+  playerStatus: "" | "pending" | "ready" | "error";
 }
 
 const TICKS_PER_SECOND = 10_000_000;
@@ -117,6 +120,7 @@ export function mapItemToMovie(item: JellyfinItem): Movie {
     originalFilename: item.MagicBoxieOriginalFilename ?? "",
     addedAt: item.DateCreated ?? new Date(0).toISOString(),
     syncEnabled: Boolean(item.MagicBoxieSyncEnabled),
+    playerStatus: item.MagicBoxiePlayerStatus ?? "",
   };
 }
 
@@ -216,7 +220,7 @@ export interface ThumbnailCandidate {
 
 export interface JobProgressEvent {
   type: "job_progress";
-  data: { movie_id: number; job_id: number; progress_percent: number };
+  data: { movie_id: number; job_id: number; job_type?: string; progress_percent: number };
 }
 export interface JobCompletedEvent {
   type: "job_completed";

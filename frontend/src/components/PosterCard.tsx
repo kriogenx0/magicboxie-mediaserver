@@ -5,6 +5,7 @@ import { useTranscodeProgress } from "../hooks/useTranscodeProgress";
 
 function StatusBadge({ movie }: { movie: Movie }) {
   const progress = useTranscodeProgress(movie.id);
+  const playerProgress = useTranscodeProgress(movie.id, "playerProgress");
 
   if (movie.status === "pending" || movie.status === "probing") {
     return (
@@ -29,6 +30,22 @@ function StatusBadge({ movie }: { movie: Movie }) {
           <div
             className="h-full bg-red-600 transition-all duration-500"
             style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+          />
+        </div>
+      </div>
+    );
+  }
+  if (movie.status === "ready" && movie.playerStatus === "pending") {
+    const pct = playerProgress;
+    return (
+      <div className="absolute inset-x-0 bottom-0 bg-black/80 px-2 py-1">
+        <div className="mb-1 text-xs text-neutral-200">
+          {pct === undefined ? "Queued for 480p" : `Making 480p ${pct.toFixed(0)}%`}
+        </div>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-neutral-700">
+          <div
+            className="h-full bg-red-600 transition-all duration-500"
+            style={{ width: `${Math.min(100, Math.max(0, pct ?? 0))}%` }}
           />
         </div>
       </div>

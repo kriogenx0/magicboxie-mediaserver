@@ -31,7 +31,8 @@ export function useLiveEvents() {
         // Ephemeral, SSE-only state: not worth a REST round trip per
         // update, so it's pushed straight into the query cache as a
         // synthetic entry that PosterCard/MovieDetailPage subscribe to.
-        queryClient.setQueryData(["transcodeProgress", evt.data.movie_id], evt.data.progress_percent);
+        const key = evt.data.job_type === "player_transcode" ? "playerProgress" : "transcodeProgress";
+        queryClient.setQueryData([key, evt.data.movie_id], evt.data.progress_percent);
         queryClient.invalidateQueries({ queryKey: ["backgroundJobs"] });
         return;
       }
