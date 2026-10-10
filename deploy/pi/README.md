@@ -1,8 +1,8 @@
 # Raspberry Pi Docker deployment
 
-Run `make deploy` (or `make publish`) from your development checkout. It syncs source to `admin@magicboxie.lan:/home/admin/magicboxie-web`, builds the ARM64 image there, and starts Docker Compose behind the Pi's existing nginx proxy on port 80.
+Run `make deploy` (or `make publish`) from your development checkout. It syncs source to `admin@magicboxie.lan:/home/admin/magicboxie-web`, builds the ARM64 image there, and starts Docker Compose behind nginx on port 80. Setup installs `deploy/pi/nginx/magicboxie.conf` as nginx's default site, so the app answers on any name or IP, and removes nginx's stock welcome page.
 
-Override the connection with `MAGICBOXIE_SSH_TARGET` and `MAGICBOXIE_REMOTE_DIR`. The Pi needs 64-bit Raspberry Pi OS, Docker with Compose, sudo access, and nginx proxying to `127.0.0.1:8080`. This workflow no longer installs a host Go/Node toolchain. GitHub runs tests only; deployment is explicit.
+Override the connection with `MAGICBOXIE_SSH_TARGET` and `MAGICBOXIE_REMOTE_DIR`. The Pi needs 64-bit Raspberry Pi OS, Docker with Compose and sudo access. This workflow no longer installs a host Go/Node toolchain. GitHub runs tests only; deployment is explicit.
 
 On-device commands: `./scripts/pi-setup.sh` builds and deploys; `make pi-logs` follows container logs.
 
