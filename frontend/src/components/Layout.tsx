@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { useUploadQueue } from "../hooks/useUploadQueue";
 import { UploadDropzone } from "./UploadDropzone";
+import { TranscodeStatus } from "./TranscodeStatus";
 
 export function Layout({ children }: { children: ReactNode }) {
   const [showUpload, setShowUpload] = useState(false);
@@ -99,6 +100,7 @@ export function Layout({ children }: { children: ReactNode }) {
           </nav>
         </div>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <TranscodeStatus />
           <button
             onClick={() => setShowUpload((v) => !v)}
             className="whitespace-nowrap rounded-sm border border-neutral-500 px-2.5 py-1 text-xs font-medium text-neutral-100 transition hover:border-white hover:bg-white/10 sm:px-3 sm:text-sm"
