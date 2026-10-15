@@ -71,7 +71,8 @@ type Manager struct {
 	gate          *Gate // optional; pauses work during playback or overheating
 
 	queue       chan queuedJob // full transcodes awaiting a worker (always served first)
-	playerQueue chan queuedJob // 480p player copies: background work, only run when no transcode is waiting
+	syncQueue   chan queuedJob // 480p copies of movies marked for the player: it waits on these, so they go next
+	playerQueue chan queuedJob // the rest of the 480p backlog: background work, only run when nothing else is waiting
 }
 
 type queuedJob struct {
@@ -151,6 +152,7 @@ func NewManager(db *gorm.DB, moviesDir, dataDir, preset string, crf, maxConcurre
 		maxConcurrent: maxConcurrent,
 		hub:           hub,
 		queue:         make(chan queuedJob, 256),
+		syncQueue:     make(chan queuedJob, 4096),
 		playerQueue:   make(chan queuedJob, 4096),
 	}
 }
@@ -190,7 +192,9 @@ func (m *Manager) Start(ctx context.Context) {
 
 	for _, job := range staleJobs {
 		if job.Type == models.JobTypePlayerTranscode {
-			m.playerQueue <- queuedJob{movieID: job.MovieID, jobType: job.Type}
+			var movie models.Movie
+			m.db.First(&movie, job.MovieID)
+			m.playerQueueFor(movie) <- queuedJob{movieID: job.MovieID, jobType: job.Type}
 		} else {
 			m.queue <- queuedJob{movieID: job.MovieID, jobType: job.Type}
 		}
@@ -235,9 +239,22 @@ func (m *Manager) Enqueue(movieID uint) {
 	m.queue <- queuedJob{movieID: movieID, jobType: models.JobTypeTranscode}
 }
 
+// playerQueueFor picks the queue for a movie's 480p copy: movies marked
+// for the player skip ahead of the library-wide backlog, since the player
+// downloads nothing new until its copy is ready.
+func (m *Manager) playerQueueFor(movie models.Movie) chan queuedJob {
+	if movie.SyncEnabled {
+		return m.syncQueue
+	}
+	return m.playerQueue
+}
+
 // EnqueuePlayer queues the 480p copy magicboxie-player downloads, for a
 // ready movie that doesn't have a current one yet. A no-op otherwise,
-// so it's safe to call whenever a movie might have become eligible.
+// so it's safe to call whenever a movie might have become eligible. A
+// movie just marked for the player whose copy already sits in the backlog
+// is moved up to the sync queue (the later backlog entry finds no queued
+// job and is skipped).
 func (m *Manager) EnqueuePlayer(movieID uint) {
 	var movie models.Movie
 	if err := m.db.First(&movie, movieID).Error; err != nil {
@@ -252,6 +269,15 @@ func (m *Manager) EnqueuePlayer(movieID uint) {
 		Where("movie_id = ? AND type = ? AND status IN ?", movieID, models.JobTypePlayerTranscode, []string{models.JobStatusQueued, models.JobStatusRunning}).
 		Count(&active)
 	if active > 0 {
+		if movie.SyncEnabled {
+			var queued int64
+			m.db.Model(&models.Job{}).
+				Where("movie_id = ? AND type = ? AND status = ?", movieID, models.JobTypePlayerTranscode, models.JobStatusQueued).
+				Count(&queued)
+			if queued > 0 {
+				go func() { m.syncQueue <- queuedJob{movieID: movieID, jobType: models.JobTypePlayerTranscode} }()
+			}
+		}
 		return
 	}
 	job := &models.Job{MovieID: movieID, Type: models.JobTypePlayerTranscode, Status: models.JobStatusQueued}
@@ -262,7 +288,8 @@ func (m *Manager) EnqueuePlayer(movieID uint) {
 	m.db.Model(&movie).Update("player_status", models.PlayerStatusPending)
 	// Called from workers too (after a transcode finishes): never block one
 	// on its own full queue.
-	go func() { m.playerQueue <- queuedJob{movieID: movieID, jobType: models.JobTypePlayerTranscode} }()
+	queue := m.playerQueueFor(movie)
+	go func() { queue <- queuedJob{movieID: movieID, jobType: models.JobTypePlayerTranscode} }()
 }
 
 func (m *Manager) worker(ctx context.Context) {
@@ -277,24 +304,38 @@ func (m *Manager) worker(ctx context.Context) {
 		if !m.waitForClear(ctx) {
 			return
 		}
-		// A waiting transcode always goes before the 480p backlog, so a new
-		// upload never queues behind hundreds of background copies.
-		select {
-		case <-ctx.Done():
+		queued, ok := m.next(ctx)
+		if !ok {
 			return
-		case queued := <-m.queue:
-			run(queued)
-			continue
-		default:
 		}
-		select {
-		case <-ctx.Done():
-			return
-		case queued := <-m.queue:
-			run(queued)
-		case queued := <-m.playerQueue:
-			run(queued)
-		}
+		run(queued)
+	}
+}
+
+// next waits for the next job, by priority: a waiting transcode, then a
+// copy the player is waiting on, then the 480p backlog - so a new upload or
+// a movie just marked for the player never queues behind hundreds of
+// background copies. False means ctx ended.
+func (m *Manager) next(ctx context.Context) (queuedJob, bool) {
+	select {
+	case queued := <-m.queue:
+		return queued, true
+	default:
+	}
+	select {
+	case queued := <-m.syncQueue:
+		return queued, true
+	default:
+	}
+	select {
+	case <-ctx.Done():
+		return queuedJob{}, false
+	case queued := <-m.queue:
+		return queued, true
+	case queued := <-m.syncQueue:
+		return queued, true
+	case queued := <-m.playerQueue:
+		return queued, true
 	}
 }
 
@@ -385,8 +426,9 @@ func (m *Manager) processPlayer(ctx context.Context, movieID uint) {
 
 	var job models.Job
 	if err := m.db.Where("movie_id = ? AND type = ? AND status = ?", movieID, models.JobTypePlayerTranscode, models.JobStatusQueued).
-		Order("created_at desc").First(&job).Error; err != nil {
-		log.Printf("transcode: no queued player job found for movie %d: %v", movieID, err)
+		Order("created_at desc").Limit(1).Find(&job).Error; err != nil || job.ID == 0 {
+		// Already run from the other queue (a movie moved up to the sync
+		// queue leaves its backlog entry behind).
 		return
 	}
 
