@@ -30,10 +30,12 @@ var legacyRoutes = map[string]string{
 // extensionRoutes are MagicBoxie-specific endpoints with no Jellyfin
 // equivalent. Everything under /api/ is one; the rest are listed by name.
 var extensionRoutes = map[string]string{
-	"POST /devices/register":      "magicboxie-device Pi check-in",
-	"GET /Videos/:itemId/preview": "short muted preview clip for the web UI",
-	"GET /Videos/:itemId/player":  "480p copy magicboxie-player downloads",
-	"GET /socket":                 "Jellyfin's WebSocket endpoint; not an OpenAPI operation. Stubbed as 404",
+	"POST /devices/register":             "magicboxie-device Pi check-in",
+	"GET /devices/videos/:itemId/player": "magicboxie-player downloads a synced movie's 480p copy without a password",
+	"GET /devices/videos/:itemId/stream": "magicboxie-player downloads a synced movie's original without a password",
+	"GET /Videos/:itemId/preview":        "short muted preview clip for the web UI",
+	"GET /Videos/:itemId/player":         "480p copy magicboxie-player downloads",
+	"GET /socket":                        "Jellyfin's WebSocket endpoint; not an OpenAPI operation. Stubbed as 404",
 }
 
 // clientFlow lists, by Jellyfin operation, what real clients call during a

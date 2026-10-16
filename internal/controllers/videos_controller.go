@@ -65,6 +65,25 @@ func (vc *VideosController) Preview(c *gin.Context) {
 	ServeFileRange(c, path, "preview.mp4")
 }
 
+// SyncedOnly lets a request through only for a movie marked for the player
+// (SyncEnabled). It guards the token-free /devices/videos routes: on the home
+// network the player downloads what it was given without a password, the
+// same way /devices/register lists it, and nothing else in the library is
+// reachable that way.
+func (vc *VideosController) SyncedOnly(c *gin.Context) {
+	id, ok := parseItemID(c.Param("itemId"), "movie")
+	if !ok {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	var movie models.Movie
+	if err := vc.db.First(&movie, id).Error; err != nil || !movie.SyncEnabled {
+		c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "item not found"})
+		return
+	}
+	c.Next()
+}
+
 // Stream serves a movie's playable file with Range support at Jellyfin's
 // conventional /Videos/{itemId}/stream path. Used by the web <video> tag,
 // AVPlayer (magicboxie-appletv), and any client downloading the file directly

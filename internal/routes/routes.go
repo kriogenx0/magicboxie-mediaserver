@@ -51,6 +51,10 @@ func Register(router *gin.Engine, deps Dependencies) {
 	// alternative to the Jellyfin login flow above for a headless device that
 	// boots straight into opportunistic sync.
 	router.POST("/devices/register", deps.ItemsController.RegisterDevice)
+	// ...and downloads the movies that check-in lists, also without a
+	// password: only movies marked for sync, the 480p copy or the original.
+	router.GET("/devices/videos/:itemId/player", deps.VideosController.SyncedOnly, deps.VideosController.Player)
+	router.GET("/devices/videos/:itemId/stream", deps.VideosController.SyncedOnly, deps.VideosController.Stream)
 
 	// Images are unauthenticated, matching real Jellyfin's convention (so
 	// <img> tags never need a token).

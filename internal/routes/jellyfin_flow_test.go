@@ -766,6 +766,24 @@ func TestFirstPartyClientsStillWork(t *testing.T) {
 		}
 	})
 
+	t.Run("the player downloads synced movies without a password", func(t *testing.T) {
+		if r := s.get("/devices/videos/"+idToyStory+"/player", noAuth); r.Status != http.StatusNotFound {
+			t.Errorf("unsynced movie = %d, want 404", r.Status)
+		}
+		if r := s.post("/api/items/"+idToyStory+"/sync", map[string]bool{"enabled": true}); r.Status != http.StatusOK {
+			t.Fatalf("mark for sync = %d\nbody: %s", r.Status, r.Body)
+		}
+		if r := s.get("/devices/videos/"+idToyStory+"/player", noAuth); r.Status != http.StatusOK || len(r.Body) != 512 {
+			t.Errorf("synced 480p copy = %d (%d bytes), want 200 with the 512-byte copy", r.Status, len(r.Body))
+		}
+		if r := s.get("/devices/videos/"+idToyStory+"/stream", noAuth); r.Status != http.StatusOK {
+			t.Errorf("synced original = %d, want 200", r.Status)
+		}
+		if r := s.post("/api/items/"+idToyStory+"/sync", map[string]bool{"enabled": false}); r.Status != http.StatusOK {
+			t.Fatalf("unmark for sync = %d", r.Status)
+		}
+	})
+
 	t.Run("appletv's latest call returns a bare array of playable movies", func(t *testing.T) {
 		r := s.get("/Users/"+s.userID+"/Items/Latest?Limit=2", withHeader("Authorization", mediaBrowser(s.token)))
 		var latest []itemSummary
