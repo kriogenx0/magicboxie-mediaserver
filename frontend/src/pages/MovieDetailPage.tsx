@@ -227,6 +227,18 @@ export function MovieDetailPage() {
               </div>
             )}
 
+            {ready && movie.playerStatus === "ready" && (
+              <div className="mt-5 rounded-sm bg-neutral-900/90 px-4 py-3 text-sm text-emerald-300">
+                The 480p copy is ready for the device.
+              </div>
+            )}
+
+            {ready && movie.playerStatus === "error" && (
+              <div className="mt-5 rounded-sm bg-neutral-900/90 px-4 py-3 text-sm text-red-300">
+                The 480p player copy failed, so the device can't download this movie.
+              </div>
+            )}
+
             {(!movie.tmdbId || movie.needsReview) && (
               <div className="mt-5 flex items-center justify-between gap-4 rounded-sm bg-neutral-900/90 px-4 py-3 text-sm text-neutral-300">
                 <span>

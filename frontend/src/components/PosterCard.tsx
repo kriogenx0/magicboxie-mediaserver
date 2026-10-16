@@ -58,7 +58,19 @@ function StatusBadge({ movie }: { movie: Movie }) {
       </div>
     );
   }
+  if (movie.status === "ready" && movie.playerStatus === "error") {
+    return (
+      <div className="absolute inset-x-0 bottom-0 bg-red-900/90 px-2 py-1 text-xs text-red-100">
+        480p copy failed
+      </div>
+    );
+  }
   return null;
+}
+
+/** Whether the movie's 480p copy is made, so the player device can download it. */
+export function isDeviceReady(movie: Movie) {
+  return movie.status === "ready" && movie.playerStatus === "ready";
 }
 
 export function PosterCard({ movie, onSelect }: { movie: Movie; onSelect?: (movie: Movie) => void }) {
@@ -90,6 +102,14 @@ export function PosterCard({ movie, onSelect }: { movie: Movie; onSelect?: (movi
           {movie.genres[0] && <span>{movie.genres[0]}</span>}
         </p>
       </div>
+      {isDeviceReady(movie) && (
+        <span
+          title="The 480p copy is ready for the player"
+          className="absolute right-1.5 top-1.5 rounded bg-black/75 px-1.5 py-0.5 text-[10px] font-bold text-emerald-400 ring-1 ring-emerald-400/70"
+        >
+          480p ✓
+        </span>
+      )}
       <StatusBadge movie={movie} />
     </Link>
   );
