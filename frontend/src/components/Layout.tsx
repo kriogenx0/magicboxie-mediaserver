@@ -79,9 +79,6 @@ export function Layout({ children }: { children: ReactNode }) {
             >
               Music
             </Link>
-            <Link to="/admin/movies" className={onAdmin ? "text-white" : "text-neutral-400 transition hover:text-neutral-200"}>
-              Admin
-            </Link>
             {onAdmin && (
               <Link to="/admin/activity" className={location.pathname === "/admin/activity" ? "text-white" : "text-neutral-400 transition hover:text-neutral-200"}>
                 Activity
@@ -107,6 +104,12 @@ export function Layout({ children }: { children: ReactNode }) {
           >
             {showUpload ? "Close" : "Add Media"}
           </button>
+          <Link
+            to="/admin/movies"
+            className={`whitespace-nowrap px-1 text-xs font-medium sm:text-sm ${onAdmin ? "text-white" : "text-neutral-400 transition hover:text-neutral-200"}`}
+          >
+            Admin
+          </Link>
           <button
             onClick={logout}
             className="hidden rounded-sm px-2 py-1 text-xs text-neutral-400 transition hover:text-white sm:block"
