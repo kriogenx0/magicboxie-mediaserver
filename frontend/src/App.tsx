@@ -20,9 +20,10 @@ import { AdminInfoPage } from "./pages/AdminInfoPage";
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, isChecking } = useAuth();
   const location = useLocation();
 
+  if (isChecking) return null;
   if (!isAuthenticated) {
     return <Navigate to="/login" state={{ from: location.pathname }} replace />;
   }

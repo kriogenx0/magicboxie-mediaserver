@@ -6,6 +6,10 @@ data_dir: "/var/lib/magicboxie"
 auth:
   # Generate with: magicboxie hash-password '<your password>'
   password_hash: ""
+  # Let requests the proxy tags "X-MagicBoxie-Network: lan" in without a
+  # password. Only for the Pi behind deploy/pi/nginx (whose docker-compose.yml
+  # turns it on); anywhere else a client could just send the header.
+  trust_network_header: false
 
 tmdb:
   # TMDB v4 read access token (https://www.themoviedb.org/settings/api)

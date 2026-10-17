@@ -25,3 +25,20 @@ If startup fails, setup stops the container and restarts the previously active s
 ## New installation
 
 Provide `/etc/magicboxie/config.yaml` based on `configs/magicboxie.example.yaml`, including a password hash and TMDB token, before running setup. Existing Docker configuration and data are retained on later deployments.
+
+## Public access (magicboxie.homecloud.one)
+
+The Pi can also be reached from outside at `https://magicboxie.homecloud.one`, through the shared VPS. A password is only needed there; at home (`magicboxie.lan`, or the Pi's IP) the web UI opens without one.
+
+How it decides: the Pi's nginx tags each request with `X-MagicBoxie-Network`. A request straight from a private address with no `X-Forwarded-For` is `lan`; everything else is `public`, including everything the VPS forwards over the tunnel (its nginx always adds `X-Forwarded-For`). `docker-compose.yml` sets `MAGICBOXIE_TRUST_NETWORK_HEADER=1` so the app acts on the tag; elsewhere (magicboxie.com) the tag is ignored and nothing changes.
+
+- **At home** the web UI gets a home-only token from `POST /api/auth/lan` without a password. Jellyfin apps can log in with any password and also get a home-only token. Home-only tokens are refused through the public address.
+- **In public** every authenticated endpoint needs the real password, and so do the device check-in and download endpoints that are open at home. Poster images stay open, as in Jellyfin.
+
+To publish it:
+
+1. Point DNS for `magicboxie.homecloud.one` at the VPS (104.131.183.186).
+2. Bring up a tunnel the Pi dials out to the VPS on (WireGuard works; see dropsync-web's `deploy/wireguard` for the same pattern), so the VPS can reach the Pi's nginx on port 80 at its tunnel address.
+3. Install `deploy/public/server/sudoers.d/magicboxie-public` on the VPS once, then run `MAGICBOXIE_PI_UPSTREAM=<pi tunnel ip>:80 deploy/public/deploy.sh`.
+
+The VPS vhost rate-limits login attempts (10 a minute per IP).

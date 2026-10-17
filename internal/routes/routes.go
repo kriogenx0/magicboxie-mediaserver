@@ -20,6 +20,9 @@ type Dependencies struct {
 	UploadsController *controllers.UploadsController
 	InfoController    *controllers.InfoController
 	EventsHub         *events.Hub
+	// TrustNetworkHeader is config auth.trust_network_header: requests the
+	// proxy tags as LAN need no password, everything else does.
+	TrustNetworkHeader bool
 }
 
 // Register wires two surfaces onto the router:
@@ -36,6 +39,9 @@ type Dependencies struct {
 //     re-match), namespaced under /api/* so they're clearly separate
 //     from the standard surface.
 func Register(router *gin.Engine, deps Dependencies) {
+	router.Use(middleware.DetectNetwork(deps.TrustNetworkHeader))
+	whenPublic := middleware.RequireAuthWhenPublic(deps.AuthManager)
+
 	router.GET("/System/Info/Public", deps.AuthController.SystemInfoPublic)
 	router.GET("/Users/Public", deps.AuthController.PublicUsers)
 	router.GET("/QuickConnect/Enabled", func(c *gin.Context) { c.JSON(200, false) })
@@ -50,11 +56,13 @@ func Register(router *gin.Engine, deps Dependencies) {
 	// player_app/views/home_sync_service.py in that repo) -- a lower-friction
 	// alternative to the Jellyfin login flow above for a headless device that
 	// boots straight into opportunistic sync.
-	router.POST("/devices/register", deps.ItemsController.RegisterDevice)
+	// Through the public address these need a token like everything else;
+	// the device only ever checks in from home.
+	router.POST("/devices/register", whenPublic, deps.ItemsController.RegisterDevice)
 	// ...and downloads the movies that check-in lists, also without a
 	// password: only movies marked for sync, the 480p copy or the original.
-	router.GET("/devices/videos/:itemId/player", deps.VideosController.SyncedOnly, deps.VideosController.Player)
-	router.GET("/devices/videos/:itemId/stream", deps.VideosController.SyncedOnly, deps.VideosController.Stream)
+	router.GET("/devices/videos/:itemId/player", whenPublic, deps.VideosController.SyncedOnly, deps.VideosController.Player)
+	router.GET("/devices/videos/:itemId/stream", whenPublic, deps.VideosController.SyncedOnly, deps.VideosController.Stream)
 
 	// Images are unauthenticated, matching real Jellyfin's convention (so
 	// <img> tags never need a token).
@@ -64,6 +72,7 @@ func Register(router *gin.Engine, deps Dependencies) {
 	router.HEAD("/Items/:itemId/Images/:imageType/:imageIndex", deps.ItemsController.ItemImage)
 
 	router.GET("/api/health", controllers.Health)
+	router.POST("/api/auth/lan", deps.AuthController.LANLogin)
 
 	authorized := router.Group("")
 	authorized.Use(middleware.RequireAuth(deps.AuthManager))

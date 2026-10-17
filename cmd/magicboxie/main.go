@@ -111,6 +111,8 @@ func main() {
 		UploadsController: uploadsController,
 		InfoController:    controllers.NewInfoController(gormDB, cfg.MoviesDir, cfg.MusicDir, cfg.DataDir),
 		EventsHub:         eventsHub,
+
+		TrustNetworkHeader: cfg.Auth.TrustNetworkHeader,
 	})
 
 	fsys, err := web.FileSystem()

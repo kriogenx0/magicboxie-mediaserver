@@ -22,6 +22,9 @@ var mediaBrowserTokenRe = regexp.MustCompile(`Token="([^"]*)"`)
 //  4. A "?api_key=<token>" (or "?ApiKey=") query param -- Jellyfin's convention
 //     for URLs that can't carry headers (<video>/<img> tags, AVPlayer,
 //     EventSource).
+//
+// A LAN-only token (issued without a password, see auth.IssueLANToken) is
+// rejected unless the request also comes from the LAN.
 func RequireAuth(manager *auth.Manager) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		token := extractToken(c)
@@ -29,8 +32,27 @@ func RequireAuth(manager *auth.Manager) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing token"})
 			return
 		}
-		if err := manager.VerifyToken(token); err != nil {
+		lanOnly, err := manager.VerifyToken(token)
+		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid or expired token"})
+			return
+		}
+		if lanOnly && !IsLAN(c) {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "this token only works on the home network"})
+			return
+		}
+		c.Next()
+	}
+}
+
+// RequireAuthWhenPublic leaves an endpoint open on the LAN (and wherever the
+// network isn't known), but asks requests through the public address for a
+// token like any other.
+func RequireAuthWhenPublic(manager *auth.Manager) gin.HandlerFunc {
+	requireAuth := RequireAuth(manager)
+	return func(c *gin.Context) {
+		if IsPublic(c) {
+			requireAuth(c)
 			return
 		}
 		c.Next()

@@ -56,11 +56,26 @@ func CheckPassword(hash, password string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) == nil
 }
 
-// IssueToken mints a new JWT valid for tokenTTL.
+// lanAudience marks a token issued without a password because the request
+// came from the home network. Such a token is only accepted on LAN requests,
+// so one copied off a home device can't be used through the public address.
+const lanAudience = "lan"
+
+// IssueToken mints a new JWT valid for tokenTTL, accepted on any network.
 func (m *Manager) IssueToken() (token string, expiresAt time.Time, err error) {
+	return m.issue(nil)
+}
+
+// IssueLANToken mints a JWT that only works on requests from the home network.
+func (m *Manager) IssueLANToken() (token string, expiresAt time.Time, err error) {
+	return m.issue(jwt.ClaimStrings{lanAudience})
+}
+
+func (m *Manager) issue(audience jwt.ClaimStrings) (token string, expiresAt time.Time, err error) {
 	expiresAt = time.Now().Add(tokenTTL)
 	claims := jwt.RegisteredClaims{
 		Subject:   "magicboxie",
+		Audience:  audience,
 		IssuedAt:  jwt.NewNumericDate(time.Now()),
 		ExpiresAt: jwt.NewNumericDate(expiresAt),
 	}
@@ -72,10 +87,20 @@ func (m *Manager) IssueToken() (token string, expiresAt time.Time, err error) {
 	return signed, expiresAt, nil
 }
 
-// VerifyToken validates a token's signature and expiry.
-func (m *Manager) VerifyToken(tokenString string) error {
-	_, err := jwt.ParseWithClaims(tokenString, &jwt.RegisteredClaims{}, func(t *jwt.Token) (interface{}, error) {
+// VerifyToken validates a token's signature and expiry, and reports whether
+// it is LAN-only (see IssueLANToken).
+func (m *Manager) VerifyToken(tokenString string) (lanOnly bool, err error) {
+	var claims jwt.RegisteredClaims
+	_, err = jwt.ParseWithClaims(tokenString, &claims, func(t *jwt.Token) (interface{}, error) {
 		return m.signingKey, nil
-	})
-	return err
+	}, jwt.WithValidMethods([]string{jwt.SigningMethodHS256.Alg()}))
+	if err != nil {
+		return false, err
+	}
+	for _, aud := range claims.Audience {
+		if aud == lanAudience {
+			return true, nil
+		}
+	}
+	return false, nil
 }

@@ -6,6 +6,10 @@ services:
     image: magicboxie-pi:local
     ports:
       - "127.0.0.1:8080:8080"
+    environment:
+      # nginx/magicboxie.conf tags every request lan or public; home needs no
+      # password, magicboxie.homecloud.one does.
+      MAGICBOXIE_TRUST_NETWORK_HEADER: "1"
     volumes:
       - /etc/magicboxie/docker.yaml:/etc/magicboxie/config.yaml:ro
       - /var/lib/magicboxie-docker:/var/lib/magicboxie

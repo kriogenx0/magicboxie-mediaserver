@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -15,6 +16,13 @@ type Config struct {
 
 	Auth struct {
 		PasswordHash string `yaml:"password_hash"`
+		// TrustNetworkHeader lets requests the reverse proxy tags with
+		// "X-MagicBoxie-Network: lan" in without a password, while requests
+		// tagged anything else (public, through the VPS) still need one. Only
+		// enable it where a proxy always overwrites that header (the Pi's
+		// nginx, deploy/pi/nginx/magicboxie.conf); otherwise any client could
+		// claim to be on the LAN. MAGICBOXIE_TRUST_NETWORK_HEADER=1 also sets it.
+		TrustNetworkHeader bool `yaml:"trust_network_header"`
 	} `yaml:"auth"`
 
 	TMDB struct {
@@ -58,6 +66,10 @@ func Load(path string) (*Config, error) {
 	}
 	if err := yaml.Unmarshal(data, &c); err != nil {
 		return nil, fmt.Errorf("parsing config file %q: %w", path, err)
+	}
+
+	if v := os.Getenv("MAGICBOXIE_TRUST_NETWORK_HEADER"); v != "" {
+		c.Auth.TrustNetworkHeader = v == "1" || strings.EqualFold(v, "true")
 	}
 
 	if c.MoviesDir == "" {

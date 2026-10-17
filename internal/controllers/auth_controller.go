@@ -8,6 +8,7 @@ import (
 
 	"magicboxie/internal/auth"
 	"magicboxie/internal/config"
+	"magicboxie/internal/middleware"
 )
 
 type AuthController struct {
@@ -152,7 +153,8 @@ type authenticateByNameRequest struct {
 
 // AuthenticateByName is Jellyfin's login endpoint. Username is accepted and
 // echoed back but never validated -- MagicBoxie has one shared password, not
-// per-user accounts.
+// per-user accounts. On the home network any password gets in, with a token
+// that only works at home; the real password gets a token that works anywhere.
 func (a *AuthController) AuthenticateByName(c *gin.Context) {
 	var req authenticateByNameRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -160,12 +162,16 @@ func (a *AuthController) AuthenticateByName(c *gin.Context) {
 		return
 	}
 
+	issue := a.manager.IssueToken
 	if !auth.CheckPassword(a.cfg.Auth.PasswordHash, req.Pw) {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
-		return
+		if !middleware.IsLAN(c) {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid password"})
+			return
+		}
+		issue = a.manager.IssueLANToken
 	}
 
-	token, _, err := a.manager.IssueToken()
+	token, _, err := issue()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue token"})
 		return
@@ -181,4 +187,20 @@ func (a *AuthController) AuthenticateByName(c *gin.Context) {
 		"ServerId":    jellyfinServerID,
 		"User":        jellyfinUser(username),
 	})
+}
+
+// LANLogin is POST /api/auth/lan: the web UI calls it before showing the
+// login page, and on the home network it gets a LAN-only token with no
+// password. Anywhere else it's a 403 and the login page shows as usual.
+func (a *AuthController) LANLogin(c *gin.Context) {
+	if !middleware.IsLAN(c) {
+		c.JSON(http.StatusForbidden, gin.H{"error": "a password is required outside the home network"})
+		return
+	}
+	token, expiresAt, err := a.manager.IssueLANToken()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to issue token"})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"AccessToken": token, "ExpiresAt": expiresAt})
 }

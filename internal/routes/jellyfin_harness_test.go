@@ -239,6 +239,13 @@ type testServer struct {
 // SPA fallback) over a fresh, seeded temp library and logs in once.
 func newTestServer(t *testing.T) *testServer {
 	t.Helper()
+	return newTestServerTrustingNetwork(t, false)
+}
+
+// newTestServerTrustingNetwork is newTestServer with auth.trust_network_header
+// set as given, as on the Pi behind its nginx.
+func newTestServerTrustingNetwork(t *testing.T, trustNetworkHeader bool) *testServer {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
 
 	root := t.TempDir()
@@ -290,6 +297,8 @@ func newTestServer(t *testing.T) *testServer {
 		UploadsController: controllers.NewUploadsController(uploadManager, cfg.MoviesDir, cfg.MusicDir, importer, musicImporter),
 		InfoController:    controllers.NewInfoController(gormDB, cfg.MoviesDir, cfg.MusicDir, cfg.DataDir),
 		EventsHub:         hub,
+
+		TrustNetworkHeader: trustNetworkHeader,
 	})
 	// A stand-in SPA bundle, so unrouted paths behave as they do in
 	// production: API-shaped ones must 404 as JSON, never fall through to

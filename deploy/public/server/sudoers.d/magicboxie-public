@@ -1,0 +1,9 @@
+# Narrow grant for deploying the magicboxie.homecloud.one vhost and certificate.
+# Install once as an administrator:
+#   scp deploy/public/server/sudoers.d/magicboxie-public admin@104.131.183.186:/tmp/
+#   ssh admin@104.131.183.186 'sudo visudo -c -f /tmp/magicboxie-public && sudo install -m 0440 -o root -g root /tmp/magicboxie-public /etc/sudoers.d/magicboxie-public && rm /tmp/magicboxie-public'
+deploy ALL=(root) NOPASSWD: \
+  /bin/cp /tmp/magicboxie.homecloud.one.conf /etc/nginx/sites-available/magicboxie.homecloud.one, \
+  /bin/cp /tmp/magicboxie.homecloud.one.bootstrap.conf /etc/nginx/sites-available/magicboxie.homecloud.one, \
+  /bin/ln -sf /etc/nginx/sites-available/magicboxie.homecloud.one /etc/nginx/sites-enabled/magicboxie.homecloud.one, \
+  /usr/bin/certbot certonly --webroot -w /var/www/certbot -d magicboxie.homecloud.one --non-interactive --agree-tos -m simplex0@gmail.com
