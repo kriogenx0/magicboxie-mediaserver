@@ -35,10 +35,6 @@ How it decides: the Pi's nginx tags each request with `X-MagicBoxie-Network`. A 
 - **At home** the web UI gets a home-only token from `POST /api/auth/lan` without a password. Jellyfin apps can log in with any password and also get a home-only token. Home-only tokens are refused through the public address.
 - **In public** every authenticated endpoint needs the real password, and so do the device check-in and download endpoints that are open at home. Poster images stay open, as in Jellyfin.
 
-To publish it:
+To publish it, follow the Magic Boxie section of home-cloud's `docs/README.md` (perfct-ink/home-cloud). The VPS reaches this nginx over the existing DropSync tunnel at `10.9.1.2:80`. The route is a Coolify (Traefik) dynamic config; `deploy/public/` here is the legacy plain-nginx alternative (`MAGICBOXIE_PI_UPSTREAM=10.9.1.2:80 deploy/public/deploy.sh`).
 
-1. Point DNS for `magicboxie.homecloud.one` at the VPS (104.131.183.186).
-2. Bring up a tunnel the Pi dials out to the VPS on (WireGuard works; see dropsync-web's `deploy/wireguard` for the same pattern), so the VPS can reach the Pi's nginx on port 80 at its tunnel address.
-3. Install `deploy/public/server/sudoers.d/magicboxie-public` on the VPS once, then run `MAGICBOXIE_PI_UPSTREAM=<pi tunnel ip>:80 deploy/public/deploy.sh`.
-
-The VPS vhost rate-limits login attempts (10 a minute per IP).
+Both VPS routes rate-limit login attempts (10 a minute per IP).
