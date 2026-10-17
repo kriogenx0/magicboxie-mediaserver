@@ -6,6 +6,12 @@ Production runs on a Raspberry Pi under systemd (`make pi-setup`,
 `make pi-install`; see the Pi section at the top of the `Makefile`). Docker
 is for local development (`make dev`).
 
+It is one of the apps on [home-cloud](https://github.com/perfct-ink/home-cloud):
+at home it answers at `http://magicboxie.lan` with no password, and from
+anywhere at `https://magicboxie.homecloud.one` with a password, through the
+public VPS and home-cloud's DropSync tunnel. See home-cloud's
+[apps overview](https://github.com/perfct-ink/home-cloud/blob/main/docs/APPS.md).
+
 ## The two Raspberry Pis
 
 MagicBoxie runs on two separate Raspberry Pis:
