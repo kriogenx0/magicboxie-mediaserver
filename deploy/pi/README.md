@@ -30,7 +30,7 @@ Provide `/etc/magicboxie/config.yaml` based on `configs/magicboxie.example.yaml`
 
 The Pi can also be reached from outside at `https://magicboxie.homecloud.one`, through the shared VPS. A password is only needed there; at home (`magicboxie.lan`, or the Pi's IP) the web UI opens without one.
 
-How it decides: the Pi's nginx tags each request with `X-MagicBoxie-Network`. A request straight from a private address with no `X-Forwarded-For` is `lan`; everything else is `public`, including everything the VPS forwards over the tunnel (its nginx always adds `X-Forwarded-For`). `docker-compose.yml` sets `MAGICBOXIE_TRUST_NETWORK_HEADER=1` so the app acts on the tag; elsewhere (magicboxie.com) the tag is ignored and nothing changes.
+How it decides: the Pi's nginx tags each request with `X-MagicBoxie-Network`. A request straight from a private address with no `X-Forwarded-For` is `lan`; everything else is `public`, including everything the VPS forwards over the tunnel (its nginx always adds `X-Forwarded-For`, and the tunnel subnet 10.9.1.0/24 counts as public even without it). `docker-compose.yml` sets `MAGICBOXIE_TRUST_NETWORK_HEADER=1` so the app acts on the tag; elsewhere (magicboxie.com) the tag is ignored and nothing changes.
 
 - **At home** the web UI gets a home-only token from `POST /api/auth/lan` without a password. Jellyfin apps can log in with any password and also get a home-only token. Home-only tokens are refused through the public address.
 - **In public** every authenticated endpoint needs the real password, and so do the device check-in and download endpoints that are open at home. Poster images stay open, as in Jellyfin.
