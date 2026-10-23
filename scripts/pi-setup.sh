@@ -60,6 +60,9 @@ if [ -n "${MAGICBOXIE_REVISION:-}" ]; then
   echo "$MAGICBOXIE_REVISION" | sudo tee /var/lib/magicboxie-docker/installed-revision >/dev/null
 fi
 
+# A player install here (it belongs on the car's Pi) would fight these units and nginx.
+./scripts/pi-remove-player.sh
+
 # Self-update from main (scripts/pi-self-update.sh): daily, after boot, and on "Update now".
 sudo sed -e "s|@REPO_DIR@|$PWD|g" deploy/pi/systemd/magicboxie-self-update.service.in |
   sudo tee /etc/systemd/system/magicboxie-self-update.service >/dev/null

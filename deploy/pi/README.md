@@ -12,6 +12,8 @@ The admin Info page shows the installed and latest commits and has an **Update n
 
 The first run turns the deployed copy into a git checkout. `make deploy` still works for trying something out, but the next nightly run puts the Pi back on `main`.
 
+Setup also removes any magicboxie-player install it finds (`scripts/pi-remove-player.sh`). The player belongs only on the car's Pi Zero; an install here once renamed this Pi `magicboxie-player`, turned off nginx and could replace these self-update units, which share its name.
+
 On-device commands: `./scripts/pi-setup.sh` builds and deploys; `make pi-logs` follows container logs.
 
 ## Existing installation
