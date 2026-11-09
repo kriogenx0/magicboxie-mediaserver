@@ -1,6 +1,6 @@
 # Raspberry Pi Docker deployment
 
-Run `make deploy` (or `make publish`) from your development checkout. It syncs source to `admin@magicboxie.lan:/home/admin/magicboxie-web`, builds the ARM64 image there, and starts Docker Compose behind nginx on port 80. Setup installs `deploy/pi/nginx/magicboxie.conf` as nginx's default site, so the app answers on any name or IP, and removes nginx's stock welcome page.
+Run `make deploy` (or `make publish`) from your development checkout. It syncs source to `admin@magicboxie.local:/home/admin/magicboxie-web`, builds the ARM64 image there, and starts Docker Compose behind nginx on port 80. Setup installs `deploy/pi/nginx/magicboxie.conf` as nginx's default site, so the app answers on any name or IP, and removes nginx's stock welcome page.
 
 Override the connection with `MAGICBOXIE_SSH_TARGET` and `MAGICBOXIE_REMOTE_DIR`. The Pi needs 64-bit Raspberry Pi OS, Docker with Compose and sudo access. This workflow no longer installs a host Go/Node toolchain. GitHub runs tests only. The Pi pulls `main` itself (see Self-update below).
 
@@ -30,7 +30,7 @@ Provide `/etc/magicboxie/config.yaml` based on `configs/magicboxie.example.yaml`
 
 ## Public access (magicboxie.homecloud.one)
 
-The Pi can also be reached from outside at `https://magicboxie.homecloud.one`, through the shared VPS. A password is only needed there; at home (`magicboxie.lan`, or the Pi's IP) the web UI opens without one.
+The Pi can also be reached from outside at `https://magicboxie.homecloud.one`, through the shared VPS. A password is only needed there; at home (`magicboxie.local`, `homepi.lan`, or the Pi's IP) the web UI opens without one.
 
 How it decides: the Pi's nginx tags each request with `X-MagicBoxie-Network`. A request straight from a private address with no `X-Forwarded-For` is `lan`; everything else is `public`, including everything the VPS forwards over the tunnel (its nginx always adds `X-Forwarded-For`, and the tunnel subnet 10.9.1.0/24 counts as public even without it). `docker-compose.yml` sets `MAGICBOXIE_TRUST_NETWORK_HEADER=1` so the app acts on the tag; elsewhere (magicboxie.com) the tag is ignored and nothing changes.
 

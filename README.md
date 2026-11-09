@@ -7,7 +7,7 @@ Production runs on a Raspberry Pi under systemd (`make pi-setup`,
 is for local development (`make dev`).
 
 It is one of the apps on [home-cloud](https://github.com/perfct-ink/home-cloud):
-at home it answers at `http://magicboxie.lan` with no password, and from
+at home it answers at `http://magicboxie.local` with no password, and from
 anywhere at `https://magicboxie.homecloud.one` with a password, through the
 public VPS and home-cloud's DropSync tunnel. See home-cloud's
 [apps overview](https://github.com/perfct-ink/home-cloud/blob/main/docs/APPS.md).
@@ -20,10 +20,10 @@ MagicBoxie runs on two separate Raspberry Pis:
 | --- | --- | --- |
 | Repository | `magicboxie-web` (this repo) | `magicboxie-player` |
 | Hardware | Raspberry Pi | Raspberry Pi Zero 2 W |
-| Hostname | `magicboxie` (`magicboxie.lan`, `magicboxie.local`) | `magicboxie-player` (`magicboxie-player.local`) |
+| Hostname | `homepi` (`homepi.lan`, `homepi.local`, plus the alias `magicboxie.local`) | `magicboxie-player` (`magicboxie-player.local`) |
 | Where it lives | At home on the home network | In the car, playing on the Honda Pilot screen over an HDMI-to-composite converter |
 | Job | Imports, stores and transcodes the movie library; serves the web app | Plays movies, serves its own control page and API, BLE control from the iOS app |
 
 The player is offline most of the time. Whenever it is on the home Wi-Fi it
-checks in with this server at `http://magicboxie.lan`, registers itself and
+checks in with this server at `http://magicboxie.local`, registers itself and
 downloads any movies it doesn't have yet. Deploy each repo only to its own Pi.

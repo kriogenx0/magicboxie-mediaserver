@@ -4,7 +4,7 @@
 # leave the development machine.
 set -euo pipefail
 
-SSH_TARGET="${MAGICBOXIE_SSH_TARGET:-admin@magicboxie.lan}"
+SSH_TARGET="${MAGICBOXIE_SSH_TARGET:-admin@magicboxie.local}"
 REMOTE_DIR="${MAGICBOXIE_REMOTE_DIR:-/home/admin/magicboxie-web}"
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
